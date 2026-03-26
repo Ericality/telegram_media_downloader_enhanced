@@ -11,6 +11,7 @@ from typing import Callable, List, Optional, Union, Dict, Any, Type
 
 from loguru import logger
 from ruamel import yaml
+from ruamel.yaml import YAML
 
 from module.cloud_drive import CloudDrive, CloudDriveConfig
 from module.filter import Filter
@@ -18,8 +19,10 @@ from module.language import Language, set_language
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
 
+import os
+import glob
+import tempfile
 import shutil
-import json
 
 _yaml = yaml.YAML()
 # pylint: disable = R0902
@@ -471,6 +474,7 @@ class Application:
             Application Name
 
         """
+        self._config_lock = asyncio.Lock()
         self.config_file: str = config_file
         self.app_data_file: str = app_data_file
         self.application_name: str = application_name
@@ -914,172 +918,161 @@ class Application:
 
     # pylint: disable = R0912
     def update_config(self, immediate: bool = True):
-        """更新配置 - 修复 chat_id 类型匹配问题"""
         try:
-            logger.info(f"开始更新配置...")
+            logger.info("开始更新配置...")
 
-            # 确保 app_data 中有 chat 配置
-            if not self.app_data.get("chat") and self.config.get("chat"):
-                self.app_data["chat"] = [
-                    {"chat_id": i} for i in range(0, len(self.config["chat"]))
-                ]
+            # 读取当前配置作为基础
+            current_config = {}
+            yaml_loader = YAML(typ='safe')
+            yaml_loader.allow_duplicate_keys = True
+            if os.path.exists(self.config_file):
+                try:
+                    with open(self.config_file, 'r', encoding='utf-8') as f:
+                        current_config = yaml_loader.load(f) or {}
+                except Exception as e:
+                    logger.warning(f"读取当前配置文件失败: {e}，将使用空配置作为基础")
+            else:
+                logger.debug("配置文件不存在，将创建新配置")
 
-            # 创建 chat_id 到索引的映射（支持整数和字符串类型）
-            chat_id_to_idx = {}
-            for idx, chat_item in enumerate(self.config.get("chat", [])):
-                chat_id = chat_item.get("chat_id")
-                if chat_id is not None:
-                    # 将 chat_id 转换为字符串以便比较
-                    chat_id_str = str(chat_id)
-                    chat_id_to_idx[chat_id_str] = idx
-                    # 同时存储整数版本（如果可能）
-                    try:
-                        chat_id_int = int(chat_id)
-                        chat_id_to_idx[chat_id_int] = idx
-                    except (ValueError, TypeError):
-                        pass
+            # 构建新的聊天配置列表
+            new_chat_list = []
+            for chat_id, chat_conf in self.chat_download_config.items():
+                new_chat_list.append({
+                    'chat_id': chat_id,
+                    'last_read_message_id': chat_conf.last_read_message_id
+                })
 
-            # 遍历聊天配置，更新 last_read_message_id
-            updated_chats = 0
-            for chat_id, chat_config in self.chat_download_config.items():
-                # 尝试多种方式查找索引
-                idx = -1
+            current_config['chat'] = new_chat_list
+            if hasattr(self, 'language'):
+                current_config['language'] = self.language.name
 
-                # 1. 尝试直接匹配（原始类型）
-                idx = chat_id_to_idx.get(chat_id, -1)
-
-                # 2. 尝试字符串匹配
-                if idx == -1:
-                    idx = chat_id_to_idx.get(str(chat_id), -1)
-
-                # 3. 尝试整数匹配（如果可能）
-                if idx == -1:
-                    try:
-                        chat_id_int = int(chat_id)
-                        idx = chat_id_to_idx.get(chat_id_int, -1)
-                    except (ValueError, TypeError):
-                        pass
-
-                # 如果不存在于原始配置中，记录详细日志
-                if idx == -1:
-                    logger.warning(f"聊天 {chat_id} (类型: {type(chat_id)}) 不在原始配置中，跳过更新")
-                    logger.debug(f"可用的配置聊天ID: {list(chat_id_to_idx.keys())}")
-                    logger.debug(f"当前聊天配置ID: {list(self.chat_download_config.keys())}")
-                    continue
-
-                # 确保 app_data 有足够的项目
-                while idx >= len(self.app_data["chat"]):
-                    self.app_data["chat"].append({})
-
-                # 更新 app_data
-                self.app_data["chat"][idx]["chat_id"] = str(chat_id)  # 统一存储为字符串
-
-                # 更新配置中的 last_read_message_id
-                if hasattr(chat_config, 'last_read_message_id') and chat_config.last_read_message_id is not None:
-                    try:
-                        current_last_id = self.config["chat"][idx].get("last_read_message_id", 0)
-                        new_last_id = int(chat_config.last_read_message_id)
-                        current_last_id = int(current_last_id)
-
-                        # 只向前更新，不后退
-                        if new_last_id > current_last_id:
-                            self.config["chat"][idx]["last_read_message_id"] = new_last_id
-                            logger.info(
-                                f"✅ 更新聊天 {chat_id} 的 last_read_message_id: {current_last_id} -> {new_last_id}")
-                            updated_chats += 1
-                        elif new_last_id == current_last_id:
-                            logger.debug(f"聊天 {chat_id} 的 last_read_message_id 未变化: {current_last_id}")
-                        else:
-                            logger.warning(
-                                f"聊天 {chat_id} 的 last_read_message_id 倒退了: 当前={current_last_id}, 新={new_last_id}")
-                    except (ValueError, TypeError) as e:
-                        logger.error(
-                            f"处理聊天 {chat_id} 的 last_read_message_id 时出错: {e}, 值={chat_config.last_read_message_id}")
-                else:
-                    logger.debug(f"聊天 {chat_id} 没有 last_read_message_id 属性或值为 None")
-
-            # 如果没有更新任何聊天，记录日志
-            if updated_chats == 0:
-                logger.warning("没有找到需要更新的聊天配置")
-                logger.debug(f"当前聊天配置数量: {len(self.chat_download_config)}")
-                logger.debug(f"配置文件中聊天数量: {len(self.config.get('chat', []))}")
-
-            # 清理旧版配置项
+            # 清理旧版字段
             old_keys = ["ids_to_retry", "chat_id", "download_filter"]
             for key in old_keys:
-                if key in self.config:
-                    self.config.pop(key)
+                if key in current_config:
+                    current_config.pop(key)
 
-            # 更新语言配置
-            if hasattr(self, 'language'):
-                self.config["language"] = self.language.name
+            if not immediate:
+                logger.info(f"跳过写入配置，更新了 {len(new_chat_list)} 个聊天")
+                return len(new_chat_list) > 0
 
-            # 立即写入配置
-            if immediate:
-                try:
-                    # 备份原始配置以防万一
-                    config_backup = f"{self.config_file}.backup.{int(time.time())}"
-                    if os.path.exists(self.config_file):
-                        # 创建备份目录
-                        backup_dir = os.path.dirname(config_backup)
-                        if backup_dir and not os.path.exists(backup_dir):
-                            os.makedirs(backup_dir, exist_ok=True)
+            # 备份原配置到持久化目录
+            backup_dir = self.session_file_path
+            os.makedirs(backup_dir, exist_ok=True)
+            base_name = os.path.basename(self.config_file)
+            backup_path = os.path.join(backup_dir, f"{base_name}.backup.{int(time.time())}")
 
-                        shutil.copy2(self.config_file, config_backup)
-                        logger.info(f"已备份配置到: {config_backup}")
+            try:
+                if os.path.exists(self.config_file):
+                    shutil.copy2(self.config_file, backup_path)
+                    logger.debug(f"已备份配置到: {backup_path}")
+                else:
+                    logger.debug("配置文件不存在，跳过备份")
+            except Exception as e:
+                logger.error(f"备份配置文件失败: {e}，将尝试继续写入")
 
-                    # 写入新配置
-                    with open(self.config_file, "w", encoding="utf-8") as yaml_file:
-                        _yaml.dump(self.config, yaml_file)
-                    logger.success(f"✅ 配置更新成功，更新了 {updated_chats} 个聊天")
+            # 直接写入原文件（覆盖）
+            try:
+                yaml_writer = YAML()
+                yaml_writer.allow_unicode = True
+                yaml_writer.sort_keys = False
+                with open(self.config_file, 'w', encoding='utf-8') as f:
+                    yaml_writer.dump(current_config, f)
+                logger.success(f"✅ 配置更新成功，更新了 {len(new_chat_list)} 个聊天")
 
-                    # 写入应用数据
-                    if self.app_data_file:
-                        with open(self.app_data_file, "w", encoding='utf-8') as yaml_file:
-                            _yaml.dump(self.app_data, yaml_file)
-                        logger.debug("应用数据更新成功")
+                # 同步内存中的配置
+                self.config = current_config
 
-                    return True
-
-                except Exception as e:
-                    logger.error(f"❌ 写入配置文件失败: {e}")
-                    import traceback
-                    logger.error(f"堆栈信息: {traceback.format_exc()}")
-                    return False
-            else:
-                logger.info(f"跳过写入配置，更新了 {updated_chats} 个聊天")
-                return updated_chats > 0
+                self._clean_old_backups(backup_dir, base_name, keep=3)
+                return True
+            except Exception as e:
+                logger.exception(f"写入配置文件失败: {e}")
+                # 尝试恢复备份
+                if os.path.exists(backup_path):
+                    try:
+                        shutil.copy2(backup_path, self.config_file)
+                        logger.info(f"已从备份恢复配置文件: {backup_path}")
+                    except Exception as restore_err:
+                        logger.error(f"恢复备份失败: {restore_err}")
+                return False
 
         except Exception as e:
-            logger.error(f"❌ 更新配置失败: {e}")
-            import traceback
-            logger.error(f"堆栈信息: {traceback.format_exc()}")
+            logger.exception(f"❌ 更新配置失败: {e}")
             return False
 
+    def _clean_old_backups(self, backup_dir, base_name, keep=3):
+        """清理指定目录中的旧备份文件"""
+        import os
+        import glob
+        pattern = os.path.join(backup_dir, f"{base_name}.backup.*")
+        backups = glob.glob(pattern)
+        if len(backups) <= keep:
+            return
+        backups.sort(key=os.path.getmtime, reverse=True)
+        for old in backups[keep:]:
+            try:
+                os.remove(old)
+                logger.debug(f"删除旧备份: {old}")
+            except Exception as e:
+                logger.warning(f"删除旧备份失败: {e}")
     def set_language(self, language: Language):
         """Set Language"""
         self.language = language
         set_language(language)
 
-    def load_config(self):
-        """Load user config"""
-        with open(
-            os.path.join(os.path.abspath("."), self.config_file), encoding="utf-8"
-        ) as f:
-            config = _yaml.load(f.read())
-            if config:
-                self.config = config
-                self.assign_config(self.config)
+    def load_config(self) -> bool:
+        import os
+        import glob
+        import shutil
+        from ruamel.yaml import YAML
+        from loguru import logger
 
-        if os.path.exists(os.path.join(os.path.abspath("."), self.app_data_file)):
-            with open(
-                os.path.join(os.path.abspath("."), self.app_data_file),
-                encoding="utf-8",
-            ) as f:
-                app_data = _yaml.load(f.read())
-                if app_data:
-                    self.app_data = app_data
-                    self.assign_app_data(self.app_data)
+        config_path = self.config_file
+
+        # 如果配置文件不存在，尝试从备份恢复
+        if not os.path.exists(config_path):
+            backups = glob.glob(f"{config_path}.backup.*")
+            if backups:
+                latest_backup = max(backups, key=os.path.getmtime)
+                logger.warning(f"配置文件不存在，尝试从备份恢复: {latest_backup}")
+                try:
+                    shutil.copy2(latest_backup, config_path)
+                    logger.info(f"已从备份恢复配置文件: {latest_backup}")
+                except Exception as e:
+                    logger.error(f"恢复备份失败: {e}")
+                    return False
+            else:
+                logger.error("配置文件不存在且无可用备份")
+                return False
+
+        # 加载配置文件
+        try:
+            yaml_loader = YAML(typ='safe')
+            yaml_loader.allow_duplicate_keys = True
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = yaml_loader.load(f)
+                if config_data is None:
+                    config_data = {}
+            self.assign_config(config_data)
+            logger.info("配置文件加载成功")
+            return True
+        except Exception as e:
+            logger.exception(f"加载配置文件失败: {e}")
+            # 尝试从备份恢复
+            backups = glob.glob(f"{config_path}.backup.*")
+            if backups:
+                latest_backup = max(backups, key=os.path.getmtime)
+                logger.warning(f"配置解析失败，尝试从备份恢复: {latest_backup}")
+                try:
+                    shutil.copy2(latest_backup, config_path)
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config_data = yaml_loader.load(f) or {}
+                    self.assign_config(config_data)
+                    logger.info("已从备份恢复配置文件并成功加载")
+                    return True
+                except Exception as restore_err:
+                    logger.error(f"从备份恢复失败: {restore_err}")
+            return False
 
     def pre_run(self):
         """before run application do"""

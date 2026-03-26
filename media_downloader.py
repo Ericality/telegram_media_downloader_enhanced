@@ -24,6 +24,7 @@ from rich.theme import Theme
 from module.app import Application, ChatDownloadConfig, DownloadStatus, TaskNode
 from module.bot import start_download_bot, stop_download_bot
 from module.download_stat import update_download_status
+from module.download_stat import get_download_result
 from module.get_chat_history_v2 import get_chat_history_v2
 from module.language import _t
 from module.pyrogram_extension import (
@@ -962,16 +963,21 @@ async def queue_monitor_task():
 
             # 如果队列使用率超过80%，发送状态报告
             if usage_percent > 0.8 and queue_status_enabled:
-                active_workers = 0
-                for _, value in app.chat_download_config.items():
-                    if value.node and value.node.download_status:
-                        active_workers += sum(1 for status in value.node.download_status.values()
-                                              if status == DownloadStatus.Downloading)
+                # 获取真实的活动 worker 数
+                active_workers = queue_manager.max_download_tasks - len(disk_monitor.paused_workers)
+
+                # 获取正在下载的任务数（从 download_result 直接取，与 Web 接口一致）
+                downloading_count = sum(len(msgs) for msgs in get_download_result().values())
+
+                # 排队任务数
+                queued_count = download_queue.qsize()
 
                 message = (
                     f"📊 队列状态报告\n"
                     f"队列使用率: {current_size}/{queue_capacity} ({int(usage_percent * 100)}%)\n"
-                    f"活动worker数: {active_workers}\n"
+                    f"活动worker数: {active_workers}\n"  # 修改为真正worker数
+                    f"正在下载任务数: {downloading_count}\n"  # 新增
+                    f"排队任务数: {queued_count}\n"  # 新增
                     f"暂停worker数: {len(disk_monitor.paused_workers)}\n"
                     f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
@@ -1028,21 +1034,32 @@ async def collect_stats_async() -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"加载失败任务统计失败 ({chat_id}): {e}")
 
-        # 获取下载目录大小（新增部分）- 使用app.save_path
+        # 获取下载目录大小
         download_dir_size_gb = 0
         try:
-            # 从app.save_path获取下载目录路径
             download_dir = app.save_path
-
             if download_dir and os.path.exists(download_dir):
-                # 在单独的线程中计算目录大小，避免阻塞事件循环
                 download_dir_size = await asyncio.to_thread(calculate_directory_size, download_dir)
-                download_dir_size_gb = download_dir_size / (1024 ** 3)  # 转换为GB
+                download_dir_size_gb = download_dir_size / (1024 ** 3)
                 logger.debug(f"下载目录 {download_dir} 大小: {download_dir_size_gb:.2f}GB")
             elif download_dir:
                 logger.debug(f"下载目录不存在: {download_dir}")
         except Exception as e:
             logger.warning(f"计算下载目录大小失败: {e}")
+
+        # 修正：活动 worker 数 = 总 worker 数 - 暂停的 worker 数
+        active_workers = queue_manager.max_download_tasks - len(disk_monitor.paused_workers)
+        if active_workers < 0:
+            active_workers = 0
+
+        # 修正：活动任务数（正在下载的任务）= download_result 中的条目总数
+        from module.download_stat import get_download_result
+        try:
+            # 浅拷贝字典，避免遍历时被其他协程修改
+            snapshot = get_download_result().copy()
+            active_tasks = sum(len(msgs) for msgs in snapshot.values())
+        except Exception:
+            active_tasks = 0
 
         return {
             "uptime": uptime_str,
@@ -1053,8 +1070,9 @@ async def collect_stats_async() -> Dict[str, Any]:
                     1024 ** 2) if disk_monitor.stats_since_last_notification.get("download_size") else 0,
             "disk_available_gb": available_gb,
             "disk_total_gb": total_gb,
-            "download_dir_size_gb": download_dir_size_gb,  # 新增字段
-            "active_tasks": getattr(app, 'max_download_task', 5) - len(disk_monitor.paused_workers),
+            "download_dir_size_gb": download_dir_size_gb,
+            "active_workers": active_workers,   # 真实活动 worker 数
+            "active_tasks": active_tasks,       # 正在下载的任务数
             "queued_tasks": queued_tasks,
             "space_low": disk_monitor.space_low,
             "failed_tasks_pending": total_failed_tasks
@@ -1509,8 +1527,12 @@ async def add_download_task(
                             if message_id_int > current_last_id:
                                 chat_config.last_read_message_id = message_id_int
                                 logger.debug(f"更新聊天 {node.chat_id} 的 last_read_message_id 到 {message_id_int}")
+                                app.update_config(immediate=True)
                         except (ValueError, TypeError) as e:
                             logger.error(f"更新 last_read_message_id 时出错: {e}")
+
+            # 关键修改：任务已加入队列，无论是否重试，都从失败列表中移除
+            await remove_failed_task(node.chat_id, message.id)
 
             logger.debug(f"已添加{'重试' if is_retry else ''}下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
             return True
@@ -2125,10 +2147,9 @@ async def download_chat_task(
 
 async def download_all_chat(client: pyrogram.Client):
     """下载所有聊天 - 同时启动新消息生产者和重试生产者"""
-    # 第一步：为每个聊天创建 TaskNode（如果尚未创建）
+    # 第一步：为每个聊天强制创建正确的 TaskNode（覆盖默认的 chat_id=0）
     for chat_id, value in app.chat_download_config.items():
-        if value.node is None:
-            value.node = TaskNode(chat_id=chat_id)
+        value.node = TaskNode(chat_id=chat_id)   # 强制覆盖
 
     # 第二步：启动重试生产者（常驻）
     retry_tasks = []
@@ -2140,14 +2161,13 @@ async def download_all_chat(client: pyrogram.Client):
     # 第三步：启动新消息生产者（每个聊天一个，完成后会退出）
     new_msg_tasks = []
     for chat_id, value in app.chat_download_config.items():
-        # 传入显式的 chat_id 参数
+        # 传入显式的 chat_id 参数（沿用之前的修改）
         task = app.loop.create_task(download_chat_task(client, chat_id, value, value.node))
         new_msg_tasks.append(task)
 
     # 等待新消息生产者全部完成
     await asyncio.gather(*new_msg_tasks, return_exceptions=True)
 
-    # 新消息生产者完成后，不取消重试生产者，让它们继续运行
     logger.info("所有新消息生产者已完成，重试生产者将继续运行")
 
 async def retry_failed_tasks(
