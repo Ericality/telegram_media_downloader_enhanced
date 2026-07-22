@@ -1,34 +1,39 @@
-
-<h1 align="center">电报资源下载</h1>
+<h1 align="center">电报资源下载 增强版</h1>
 
 <p align="center">
-<a href="https://github.com/tangyoha/telegram_media_downloader/actions"><img alt="Unittest" src="https://github.com/tangyoha/telegram_media_downloader/workflows/Unittest/badge.svg"></a>
-<a href="https://codecov.io/gh/tangyoha/telegram_media_downloader"><img alt="Coverage Status" src="https://codecov.io/gh/tangyoha/telegram_media_downloader/branch/master/graph/badge.svg"></a>
-<a href="https://github.com/tangyoha/telegram_media_downloader/blob/master/LICENSE"><img alt="License: MIT" src="https://black.readthedocs.io/en/stable/_static/license.svg"></a>
+<a href="https://github.com/Ericality/telegram_media_downloader_enhanced/actions"><img alt="Unittest" src="https://github.com/Ericality/telegram_media_downloader_enhanced/workflows/Unittest/badge.svg"></a>
+<a href="https://github.com/Ericality/telegram_media_downloader_enhanced/blob/master/LICENSE"><img alt="License: MIT" src="https://black.readthedocs.io/en/stable/_static/license.svg"></a>
 <a href="https://github.com/python/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
-<a href="https://github.com/tangyoha/telegram_media_downloader/releases">
-<img alt="Code style: black" src="https://img.shields.io/github/v/release/tangyoha/telegram_media_downloader?display_name=tag">
-</a>
 </p>
 
 <h3 align="center">
   <a href="./README.md">English</a><span> · </span>
-  <a href="https://github.com/tangyoha/telegram_media_downloader/discussions/categories/ideas">新功能请求</a>
+  <a href="https://github.com/Ericality/telegram_media_downloader_enhanced/issues">报告bug</a>
   <span> · </span>
-  <a href="https://github.com/tangyoha/telegram_media_downloader/issues">报告bug</a>
-  <span> · </span>
-  帮助: <a href="https://github.com/tangyoha/telegram_media_downloader/discussions">讨论</a>
-  <span> & </span>
   <a href="https://t.me/TeegramMediaDownload">电报讨论群</a>
 </h3>
 
+> **注意：** 本项目基于 [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader) 增强开发。
+> 原作者：[tangyoha](https://github.com/tangyoha)。遵循 [MIT](./LICENSE) 许可证。
+
 ## 概述
 
-> 支持两种默认运行
+> 支持两种默认运行模式
 
-* 机器人运行，从机器人下发命令`下载`或者`转发`
+* 机器人模式：通过机器人下发 `下载` 或者 `转发` 命令
 
-* 作为一个一次性的下载工具下载
+* 独立模式：作为一次性下载工具使用
+
+## ✨ 增强功能（相比原版）
+
+- 🚀 **下载与通知队列分离**，独立 worker 池管理
+- 🔔 **双通知系统** — 支持 Bark 推送 + 群晖 Chat 机器人
+- 💾 **磁盘空间监控**，空间不足自动暂停/恢复下载 worker
+- 🔄 **无限失败重试**机制，持久化失败任务追踪
+- 🛑 **优雅退出** — 退出时将未完成任务记录到重试列表
+- 🌐 **Web 管理面板**，支持登录认证
+- ☁️ **云存储上传**（Rclone / Aligo 支持）
+- 📊 **统计与监控**，支持定时通知报告
 
 ### 界面
 
@@ -54,25 +59,25 @@
 | 语言         | `Python 3.7` 及以上                      |
 | 下载媒体类型 | 音频、文档、照片、视频、video_note、语音 |
 
-### 版本发布计划
+### 鸣谢
 
-* [v2.2.0](https://github.com/tangyoha/telegram_media_downloader/issues/2)
+* 基于 [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader)，原作者 [tangyoha](https://github.com/tangyoha)
 
 ## 安装
 
 对于具有 `make` 可用性的 *nix 操作系统发行版
 
 ```sh
-git clone https://github.com/tangyoha/telegram_media_downloader.git
-cd telegram_media_downloader
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 make install
 ```
 
 对于没有内置 `make` 的 Windows
 
 ```sh
-git clone https://github.com/tangyoha/telegram_media_downloader.git
-cd telegram_media_downloader
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 pip3 install -r requirements.txt
 ```
 ## Docker容器
@@ -80,32 +85,15 @@ pip3 install -r requirements.txt
 
 确保安装了 **docker** 和 **docker-compose**
 ```sh
-docker pull tangyoha/telegram_media_downloader:latest
-mkdir -p ~/app && mkdir -p ~/app/log/ && cd ~/app
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/blob/master/docker-compose.yaml -O docker-compose.yaml
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/blob/master/config.yaml -O config.yaml
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/blob/master/data.yaml -O data.yaml
-# vi config.yaml and docker-compose.yaml
-vi config.yaml
-
-# 第一次需要前台启动
-# 输入你的电话号码和密码，然后退出(ctrl + c)
-docker-compose run --rm telegram_media_downloader
-
-# 执行完以上操作后，后面的所有启动都在后台启动
-docker-compose up -d
-
-＃ 升级
-docker pull tangyoha/telegram_media_downloader:latest
-cd ~/app
-docker-compose down
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 docker-compose up -d
 ```
 
 ## 升级安装
 
 ```sh
-cd telegram_media_downloader
+cd telegram_media_downloader_enhanced
 pip3 install -r requirements.txt
 ```
 
@@ -176,6 +164,8 @@ file_path_prefix:
 upload_drive:
   enable_upload_file: true
   remote_dir: drive:/telegram
+  upload_adapter: rclone
+  rclone_path: D:\rclone\rclone.exe
   before_upload_file_zip: True
   after_upload_file_delete: True
 hide_file_name: true
@@ -198,13 +188,13 @@ enable_download_txt: false
 - **bot_token** - 你的机器人凭证
 - **chat** -  多频道
   - `chat_id` -  您要下载媒体的聊天/频道的 ID。你从上述步骤中得到的。
-  - `download_filter` - 下载过滤器, 查阅 [如何使用过滤器](https://github.com/tangyoha/telegram_media_downloader/wiki/%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8%E8%BF%87%E6%BB%A4%E5%99%A8)
-  - `last_read_message_id` -如果这是您第一次阅读频道，请将其设置为“0”，或者如果您已经使用此脚本下载媒体，它将有一些数字，这些数字会在脚本成功执行后自动更新。不要改变它。
+  - `download_filter` - 下载过滤器, 查阅 [如何使用过滤器](https://github.com/tangyoha/telegram_media_downloader/wiki/%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8%E8%BF%87%E6%BB%A4%E5%99%A8)（原版文档）
+  - `last_read_message_id` -如果这是您第一次阅读频道，请将其设置为"0"，或者如果您已经使用此脚本下载媒体，它将有一些数字，这些数字会在脚本成功执行后自动更新。不要改变它。
 - **chat_id** - 您要下载媒体的聊天/频道的 ID。你从上述步骤中得到的。
-- **last_read_message_id** - 如果这是您第一次阅读频道，请将其设置为“0”，或者如果您已经使用此脚本下载媒体，它将有一些数字，这些数字会在脚本成功执行后自动更新。不要改变它。
+- **last_read_message_id** - 如果这是您第一次阅读频道，请将其设置为"0"，或者如果您已经使用此脚本下载媒体，它将有一些数字，这些数字会在脚本成功执行后自动更新。不要改变它。
 - **ids_to_retry** - `保持原样。`下载器脚本使用它来跟踪所有跳过的下载，以便在下次执行脚本时可以下载它。
 - **media_types** - 要下载的媒体类型，您可以更新要下载的媒体类型，它可以是一种或任何可用类型。
-- **file_formats** - 为支持的媒体类型（“音频”、“文档”和“视频”）下载的文件类型。默认格式为“all”，下载所有文件。
+- **file_formats** - 为支持的媒体类型（"音频"、"文档"和"视频"）下载的文件类型。默认格式为 `all`，下载所有文件。
 - **save_path** - 你想存储下载文件的根目录
 - **file_path_prefix** - 存储文件子文件夹，列表的顺序不定，可以随机组合
   - `chat_title`      - 聊天频道或者群组标题, 如果找不到标题则为配置文件中的`chat_id`
@@ -214,7 +204,7 @@ enable_download_txt: false
   - `enable_upload_file` - [必填]启用上传文件，默认为`false`
   - `remote_dir` - [必填]你上传的地方
   - `upload_adapter` - [必填]上传文件适配器，可以为`rclone`,`aligo`。如果为`rclone`，则支持rclone所有支持上传的服务器，如果为aligo，则支持上传阿里云盘
-  - `rclone_path`，如果配置`upload_adapter`为`rclone`则为必填，`rclone`的可执行目录，查阅 [如何使用rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone)
+  - `rclone_path`，如果配置`upload_adapter`为`rclone`则为必填，`rclone`的可执行目录，查阅 [如何使用rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone)（原版文档）
   - `before_upload_file_zip` - 上传前压缩文件，默认为`false`
   - `after_upload_file_delete` - 上传成功后删除文件，默认为`false`
 - **file_name_prefix** - 自定义文件名称,使用和 **file_path_prefix** 一样
@@ -271,22 +261,11 @@ proxy:
 
 ## 贡献
 
-### 贡献指南
+### 参与贡献
 
-通读我们的[贡献指南](./CONTRIBUTING.md)，了解我们的提交流程、编码规则等。
+本项目为个人增强项目，欢迎提交 Issue 和 PR！
 
-### 想帮忙？
+### 鸣谢
 
-想要提交错误、贡献一些代码或改进文档？出色的！阅读我们的 [贡献指南](./CONTRIBUTING.md)。
-
-### 行为守则
-
-帮助我们保持 Telegram Media Downloader 的开放性和包容性。请阅读并遵守我们的[行为准则](./CODE_OF_CONDUCT.md)。
-
-
-### 赞助
-
-<p>
-<img alt="Code style: black" style="width:30%" src="./screenshot/alipay.JPG">
-<img alt="Code style: black" style="width:30%" src="./screenshot/wechat.JPG">
-</p>
+本项目基于 [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader)，原作者为 [tangyoha](https://github.com/tangyoha)。  
+原始设计和实现的所有功劳归于原作者。
