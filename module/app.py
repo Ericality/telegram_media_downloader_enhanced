@@ -941,15 +941,27 @@ class Application:
             else:
                 logger.debug("配置文件不存在，将创建新配置")
 
-            # Build new chat config list
-            new_chat_list = []
+            # Build lookup for new last_read_message_id values
+            id_to_new_value = {}
             for chat_id, chat_conf in self.chat_download_config.items():
-                new_chat_list.append({
-                    'chat_id': chat_id,
-                    'last_read_message_id': chat_conf.last_read_message_id
-                })
+                id_to_new_value[chat_id] = chat_conf.last_read_message_id
 
-            current_config['chat'] = new_chat_list
+            # Update last_read_message_id in existing chat config list (preserve all entries)
+            if 'chat' in current_config and isinstance(current_config['chat'], list):
+                for chat_entry in current_config['chat']:
+                    if isinstance(chat_entry, dict) and 'chat_id' in chat_entry:
+                        cid = chat_entry['chat_id']
+                        if cid in id_to_new_value:
+                            chat_entry['last_read_message_id'] = id_to_new_value[cid]
+            else:
+                # Fallback: if no chat key exists, build from scratch
+                current_config['chat'] = [
+                    {'chat_id': cid, 'last_read_message_id': conf.last_read_message_id}
+                    for cid, conf in self.chat_download_config.items()
+                ]
+
+            updated_count = len(id_to_new_value)
+
             if hasattr(self, 'language'):
                 current_config['language'] = self.language.name
 
@@ -960,8 +972,8 @@ class Application:
                     current_config.pop(key)
 
             if not immediate:
-                logger.info(f"跳过写入配置，更新了 {len(new_chat_list)} 个聊天")
-                return len(new_chat_list) > 0
+                logger.info(f"跳过写入配置，更新了 {updated_count} 个聊天")
+                return updated_count > 0
 
             # Backup config to persistent directory
             backup_dir = self.session_file_path
@@ -985,7 +997,8 @@ class Application:
                 yaml_writer.sort_keys = False
                 with open(self.config_file, 'w', encoding='utf-8') as f:
                     yaml_writer.dump(current_config, f)
-                logger.success(f"✅ 配置更新成功，更新了 {len(new_chat_list)} 个聊天")
+                updated_count = len(id_to_new_value) if 'id_to_new_value' in dir() else 0
+                logger.success(f"✅ 配置更新成功，更新了 {updated_count} 个聊天的进度")
 
                 # Sync in-memory config
                 self.config = current_config
