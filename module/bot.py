@@ -23,6 +23,7 @@ from module.app import (
     TaskType,
     UploadStatus,
 )
+from module.download_stat import get_download_result, get_total_download_speed, get_download_state, DownloadState
 from module.filter import Filter
 from module.get_chat_history_v2 import get_chat_history_v2
 from module.language import Language, _t
@@ -178,6 +179,7 @@ class DownloadBot:
             ),
             types.BotCommand("set_language", _t("Set language")),
             types.BotCommand("stop", _t("Stop bot download or forward")),
+            types.BotCommand("status", _t("Show download progress and task overview")),
         ]
 
         self.app = app
@@ -307,6 +309,14 @@ class DownloadBot:
             MessageHandler(
                 forward_to_comments,
                 filters=pyrogram.filters.command(["forward_to_comments"])
+                & pyrogram.filters.user(self.allowed_user_ids),
+            )
+        )
+
+        self.bot.add_handler(
+            MessageHandler(
+                status_command,
+                filters=pyrogram.filters.command(["status"])
                 & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
@@ -1166,3 +1176,109 @@ async def forward_to_comments(client: pyrogram.Client, message: pyrogram.types.M
         message (pyrogram.types.Message): The message containing the command.
     """
     return await forward_message_impl(client, message, True)
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format byte size to human-readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+async def status_command(client: pyrogram.Client, message: pyrogram.types.Message):
+    """Handle /status command — show download progress and task overview."""
+
+    download_result = get_download_result()
+    total_speed = get_total_download_speed()
+
+    # Build message header
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg_lines = [
+        f"📊 **Download Status** ({now_str})",
+        f"━━━━━━━━━━━━━━━━━━━━━",
+    ]
+
+    # --- Currently downloading files ---
+    if download_result:
+        msg_lines.append("")
+        msg_lines.append("🔄 **Currently Downloading:**")
+        for chat_id, tasks in download_result.items():
+            for msg_id, info in tasks.items():
+                file_name = info.get("file_name", "unknown")
+                total_size = info.get("total_size", 0)
+                down_byte = info.get("down_byte", 0)
+                speed = info.get("download_speed", 0)
+
+                if total_size > 0:
+                    pct = down_byte / total_size * 100
+                    bar_len = 10
+                    filled = int(bar_len * pct / 100)
+                    bar = "█" * filled + "░" * (bar_len - filled)
+                    progress_str = f"{bar} {pct:.1f}%"
+                else:
+                    progress_str = f"{_format_size(down_byte)} (unknown total)"
+
+                msg_lines.append(f"  📁 `{file_name}`")
+                msg_lines.append(f"     {progress_str} · {_format_size(speed)}/s")
+    else:
+        msg_lines.append("")
+        msg_lines.append("🔄 **Currently Downloading:** None")
+
+    # Total download speed
+    if total_speed > 0:
+        msg_lines.append(f"  ⚡ Total speed: {_format_size(total_speed)}/s")
+
+    # --- Task nodes overview ---
+    msg_lines.append("")
+    msg_lines.append("━━━━━━━━━━━━━━━━━━━━━")
+    msg_lines.append("📋 **Task Overview:**")
+
+    active_tasks = []
+    finished_tasks = []
+    for task_id, node in _bot.task_node.items():
+        if node.is_running and not node.is_finish():
+            active_tasks.append((task_id, node))
+        elif node.is_finish():
+            finished_tasks.append((task_id, node))
+
+    if active_tasks:
+        msg_lines.append(f"  ⏳ Active tasks: {len(active_tasks)}")
+        for task_id, node in active_tasks[:10]:  # Cap at 10 to avoid message too long
+            task_type = node.task_type.name if node.task_type else "Download"
+            chat_title = node.replay_message[:30] if node.replay_message else f"chat {node.chat_id}"
+            msg_lines.append(f"     • Task #{task_id} [{task_type}] {chat_title}")
+        if len(active_tasks) > 10:
+            msg_lines.append(f"     ... and {len(active_tasks) - 10} more")
+    else:
+        msg_lines.append(f"  ⏳ Active tasks: 0")
+
+    if finished_tasks:
+        msg_lines.append(f"  ✅ Finished tasks: {len(finished_tasks)}")
+
+    # --- Config overview ---
+    msg_lines.append("")
+    msg_lines.append("━━━━━━━━━━━━━━━━━━━━━")
+    msg_lines.append("⚙️ **Config Overview:**")
+
+    # Chats being downloaded
+    if hasattr(_bot.app, 'chat_download_config'):
+        chat_count = len(_bot.app.chat_download_config)
+        msg_lines.append(f"  📡 Monitored chats: {chat_count}")
+
+    # Queue status if accessible
+    try:
+        from module.pyrogram_extension import get_max_concurrent_transmissions
+    except ImportError:
+        pass
+
+    msg_lines.append(f"  🏷️  Media types: {', '.join(_bot.app.media_types[:5])}")
+    if hasattr(_bot.app, 'upload_drive') and _bot.app.upload_drive.get('enable_upload_file'):
+        msg_lines.append(f"  ☁️  Cloud upload: Enabled")
+
+    result = "\n".join(msg_lines)
+    await client.send_message(message.chat.id, result)
