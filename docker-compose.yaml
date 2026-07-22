@@ -5,7 +5,7 @@ services:
     image: telegram_media_downloader_enhanced:latest
     build: .
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - "./downloads/:/app/downloads/"
       - "$HOME/.config/rclone/:$HOME/.config/rclone/"
