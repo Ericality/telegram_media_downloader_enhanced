@@ -82,95 +82,12 @@ logging.basicConfig(
 )
 
 
-class ColorFormatter(logging.Formatter):
-    """Colored log formatter with ANSI color codes for visual log level distinction."""
-    COLORS = {
-        'DEBUG': '\033[36m',
-        'INFO': '\033[32m',
-        'WARNING': '\033[33m',
-        'ERROR': '\033[31m',
-        'CRITICAL': '\033[35m',
-        'RESET': '\033[0m',
-    }
-
-    def format(self, record):
-        if record.levelname in self.COLORS:
-            record.levelname = f"{self.COLORS[record.levelname]}{record.levelname}{self.COLORS['RESET']}"
-            record.msg = f"{self.COLORS.get(record.levelname.strip(self.COLORS['RESET']), '')}{record.msg}{self.COLORS['RESET']}"
-        return super().format(record)
-
-
 # Bark notification level mapping
 BARK_LEVELS = {
-    "active": "active",  # Active notification (default)
-    "timeSensitive": "timeSensitive",  # Time-sensitive notification
-    "passive": "passive"  # Passive notification (silent)
+    "active": "active",
+    "timeSensitive": "timeSensitive",
+    "passive": "passive"
 }
-
-# Default notification config per event type
-NOTIFICATION_CONFIGS = {
-    "startup": {
-        "group": "系统状态",
-        "level": "active"
-    },
-    "shutdown": {
-        "group": "系统状态",
-        "level": "active"
-    },
-    "stats_summary": {
-        "group": "统计报告",
-        "level": "passive"
-    },
-    "task_paused": {
-        "group": "任务状态",
-        "level": "timeSensitive"
-    },
-    "disk_space": {
-        "group": "系统警告",
-        "level": "active"
-    },
-    "queue_full": {
-        "group": "系统警告",
-        "level": "timeSensitive"
-    },
-    "queue_status": {
-        "group": "统计报告",
-        "level": "passive"
-    },
-    "failed_task": {
-        "group": "任务状态",
-        "level": "passive"
-    },
-    "test": {
-        "group": "测试",
-        "level": "passive"
-    }
-}
-
-
-def get_notification_config(event_type: str) -> dict:
-    """Get notification config for a given event type."""
-    default_config = {
-        "group": None,  # Use global default
-        "level": None  # Use global default
-    }
-
-    # Check user-defined event configs first
-    bark_config = getattr(app, 'bark_notification', {})
-    event_configs = bark_config.get('event_configs', {})
-
-    if event_type in event_configs:
-        config = event_configs[event_type]
-        return {
-            "group": config.get("group"),
-            "level": config.get("level")
-        }
-
-    # Then fall back to built-in defaults
-    if event_type in NOTIFICATION_CONFIGS:
-        return NOTIFICATION_CONFIGS[event_type]
-
-    return default_config
 
 CONFIG_NAME = "config.yaml"
 DATA_FILE_NAME = "data.yaml"
@@ -2220,11 +2137,6 @@ async def retry_failed_tasks(
         return len(failed_tasks[:max_batch]), 0
 
 
-def _exec_loop():
-    """Execute main loop."""
-    app.loop.run_until_complete(run_until_all_task_finish())
-
-
 async def start_server(client: pyrogram.Client):
     """Start Pyrogram client."""
     await client.start()
@@ -2511,24 +2423,6 @@ def check_config_consistency(app):
             issues.append("群晖Chat通知已启用但Webhook URL未设置")
 
     return issues
-
-
-async def send_event_notification(event_type: str, title: str, body: str, custom_group: str = None,
-                                  custom_level: str = None):
-    """Send event notification with custom group and level."""
-    # Get default config for event type
-    event_config = get_notification_config(event_type)
-
-    # Use custom config or event default
-    group = custom_group or event_config.get("group")
-    level = custom_level or event_config.get("level")
-
-    # Validate level value
-    if level and level not in BARK_LEVELS:
-        logger.warning(f"无效的通知级别: {level}，使用默认值")
-        level = None
-
-    return await send_bark_notification(title, body, group=group, level=level)
 
 
 def main():
