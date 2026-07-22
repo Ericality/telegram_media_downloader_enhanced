@@ -997,7 +997,6 @@ class Application:
                 yaml_writer.sort_keys = False
                 with open(self.config_file, 'w', encoding='utf-8') as f:
                     yaml_writer.dump(current_config, f)
-                updated_count = len(id_to_new_value) if 'id_to_new_value' in dir() else 0
                 logger.success(f"✅ 配置更新成功，更新了 {updated_count} 个聊天的进度")
 
                 # Sync in-memory config

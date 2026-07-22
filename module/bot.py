@@ -367,7 +367,7 @@ async def send_help_str(client: pyrogram.Client, chat_id):
             [
                 InlineKeyboardButton(
                     "Github",
-                    url="https://github.com/tangyoha/telegram_media_downloader/releases",
+                    url="https://github.com/Ericality/telegram_media_downloader_enhanced",
                 ),
                 InlineKeyboardButton(
                     "Join us", url="https://t.me/TeegramMediaDownload"
