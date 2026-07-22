@@ -1648,7 +1648,7 @@ async def add_download_task_batch(
 async def save_msg_to_file(
         app, chat_id: Union[int, str], message: pyrogram.types.Message
 ):
-    """Save message text to a file."""
+    """Save message text or caption to a .txt file."""
     dirname = validate_title(
         message.chat.title if message.chat and message.chat.title else str(chat_id)
     )
@@ -1666,8 +1666,9 @@ async def save_msg_to_file(
     if _is_exist(file_name):
         return DownloadStatus.SkipDownload, None
 
+    content = message.text or message.caption or ""
     with open(file_name, "w", encoding="utf-8") as f:
-        f.write(message.text or "")
+        f.write(content)
 
     return DownloadStatus.SuccessDownload, file_name
 
@@ -1689,7 +1690,7 @@ async def download_task(client, message, node):
             except:
                 pass
 
-        if app.enable_download_txt and message.text and not message.media:
+        if app.enable_download_txt and (message.text or message.caption):
             download_status, file_name = await save_msg_to_file(app, node.chat_id, message)
         else:
             download_status, file_name = original_download_status, file_name
