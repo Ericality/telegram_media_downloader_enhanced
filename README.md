@@ -1,32 +1,38 @@
-
-<h1 align="center">Telegram Media Downloader</h1>
+<h1 align="center">Telegram Media Downloader Enhanced</h1>
 
 <p align="center">
-<a href="https://github.com/tangyoha/telegram_media_downloader/actions"><img alt="Unittest" src="https://github.com/tangyoha/telegram_media_downloader/workflows/Unittest/badge.svg"></a>
-<a href="https://codecov.io/gh/tangyoha/telegram_media_downloader"><img alt="Coverage Status" src="https://codecov.io/gh/tangyoha/telegram_media_downloader/branch/master/graph/badge.svg"></a>
-<a href="https://github.com/tangyoha/telegram_media_downloader/blob/master/LICENSE"><img alt="License: MIT" src="https://black.readthedocs.io/en/stable/_static/license.svg"></a>
+<a href="https://github.com/Ericality/telegram_media_downloader_enhanced/actions"><img alt="Unittest" src="https://github.com/Ericality/telegram_media_downloader_enhanced/workflows/Unittest/badge.svg"></a>
+<a href="https://github.com/Ericality/telegram_media_downloader_enhanced/blob/master/LICENSE"><img alt="License: MIT" src="https://black.readthedocs.io/en/stable/_static/license.svg"></a>
 <a href="https://github.com/python/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
-<a href="https://github.com/tangyoha/telegram_media_downloader/releases">
-<img alt="Code style: black" src="https://img.shields.io/github/v/release/tangyoha/telegram_media_downloader?display_name=tag"></a>
 </p>
 
 <h3 align="center">
   <a href="./README_CN.md">中文</a><span> · </span>
-  <a href="https://github.com/tangyoha/telegram_media_downloader/discussions/categories/ideas">Feature request</a>
+  <a href="https://github.com/Ericality/telegram_media_downloader_enhanced/issues">Report a bug</a>
   <span> · </span>
-  <a href="https://github.com/tangyoha/telegram_media_downloader/issues">Report a bug</a>
-  <span> · </span>
-  Support: <a href="https://github.com/tangyoha/telegram_media_downloader/discussions">Discussions</a>
-  <span> & </span>
   <a href="https://t.me/TeegramMediaDownload">Telegram Community</a>
 </h3>
 
+> **Note:** This project is based on [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader), enhanced with additional features.
+> Original author: [tangyoha](https://github.com/tangyoha). Licensed under [MIT](./LICENSE).
+
 ## Overview
-> Support two default running
+> Support two default running modes
 
-* The robot is running, and the command `download` or `forward` is issued from the robot
+* Bot mode: issue `download` or `forward` commands through the bot
 
-* Download as a one-time download tool
+* Standalone mode: download as a one-time tool
+
+## ✨ Enhancements (vs original)
+
+- 🚀 **Download & notification queue separation** with independent worker pools
+- 🔔 **Dual notification system** — Bark push + Synology Chat bot support
+- 💾 **Disk space monitoring** with auto pause/resume of download workers
+- 🔄 **Infinite failed-task retry** mechanism with persistent failed-task tracking
+- 🛑 **Graceful shutdown** — records in-flight tasks to retry list on exit
+- 🌐 **Web admin panel** with login authentication
+- ☁️ **Cloud storage upload** (Rclone / Aligo support)
+- 📊 **Statistics & monitoring** with periodic notification reports
 
 ### UI
 
@@ -51,25 +57,25 @@
 | Language             | `Python 3.7` and above                           |
 | Download media types | audio, document, photo, video, video_note, voice |
 
-### Version release plan
+### Credits
 
-* [v2.2.0](https://github.com/tangyoha/telegram_media_downloader/issues/2)
+* Based on [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader) by [tangyoha](https://github.com/tangyoha)
 
 ## Installation
 
 For *nix os distributions with `make` availability
 
 ```sh
-git clone https://github.com/tangyoha/telegram_media_downloader.git
-cd telegram_media_downloader
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 make install
 ```
 
 For Windows which doesn't have `make` inbuilt
 
 ```sh
-git clone https://github.com/tangyoha/telegram_media_downloader.git
-cd telegram_media_downloader
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 pip3 install -r requirements.txt
 ```
 
@@ -78,38 +84,21 @@ pip3 install -r requirements.txt
 
 Make sure you have **docker** and **docker-compose** installed
 ```sh
-docker pull tangyoha/telegram_media_downloader:latest
-mkdir -p ~/app && mkdir -p ~/app/log/ && cd ~/app
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/master/docker-compose.yaml -O docker-compose.yaml
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/master/config.yaml -O config.yaml
-wget https://raw.githubusercontent.com/tangyoha/telegram_media_downloader/master/data.yaml -O data.yaml
-# vi config.yaml and docker-compose.yaml
-vi config.yaml
-
-# The first time you need to start the foreground
-# enter your phone number and code, then exit(ctrl + c)
-docker-compose run --rm telegram_media_downloader
-
-# After performing the above operations, all subsequent startups will start in the background
-docker-compose up -d
-
-# Upgrade
-docker pull tangyoha/telegram_media_downloader:latest
-cd ~/app
-docker-compose down
+git clone https://github.com/Ericality/telegram_media_downloader_enhanced.git
+cd telegram_media_downloader_enhanced
 docker-compose up -d
 ```
 
 ## Upgrade installation
 
 ```sh
-cd telegram_media_downloader
+cd telegram_media_downloader_enhanced
 pip3 install -r requirements.txt
 ```
 
 ## Configuration
 
-All the configurations are  passed to the Telegram Media Downloader via `config.yaml` file.
+All the configurations are passed to the Telegram Media Downloader via `config.yaml` file.
 
 **Getting your API Keys:**
 The very first step requires you to obtain a valid Telegram API key (API id/hash pair):
@@ -204,7 +193,7 @@ enable_download_txt: false
 - **bot_token** - Your bot token
 - **chat** - Chat list
   - `chat_id` -  The id of the chat/channel you want to download media. Which you get from the above-mentioned steps.
-  - `download_filter` - Download filter, see [How to use Filter](https://github.com/tangyoha/telegram_media_downloader/wiki/How-to-use-Filter)
+  - `download_filter` - Download filter, see [How to use Filter](https://github.com/tangyoha/telegram_media_downloader/wiki/How-to-use-Filter) (original docs)
   - `last_read_message_id` - If it is the first time you are going to read the channel let it be `0` or if you have already used this script to download media it will have some numbers which are auto-updated after the scripts successful execution. Don't change it.
   - `ids_to_retry` - `Leave it as it is.` This is used by the downloader script to keep track of all skipped downloads so that it can be downloaded during the next execution of the script.
 - **media_types** - Type of media to download, you can update which type of media you want to download it can be one or any of the available types.
@@ -218,7 +207,7 @@ enable_download_txt: false
   - `enable_upload_file` - Enable upload file, default `false`.
   - `remote_dir` - Where you upload, like `drive_id/drive_name`.
   - `upload_adapter` - Upload file adapter, which can be `rclone`, `aligo`. If it is `rclone`, it supports all `rclone` servers that support uploading. If it is `aligo`, it supports uploading `Ali cloud disk`.
-  - `rclone_path` - RClone exe path, see [How to use rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone)
+  - `rclone_path` - RClone exe path, see [How to use rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone) (original docs)
   - `before_upload_file_zip` - Zip file before upload, default `false`.
   - `after_upload_file_delete` - Delete file after upload success, default `false`.
 - **file_name_prefix** - Custom file name, use the same as **file_path_prefix**
@@ -264,28 +253,15 @@ proxy:
   password: your_password(delete the line if none)
 ```
 
-If your proxy doesn’t require authorization you can omit username and password. Then the proxy will automatically be enabled.
+If your proxy doesn't require authorization you can omit username and password. Then the proxy will automatically be enabled.
 
 ## Contributing
 
-### Contributing Guidelines
+### Contribution
 
-Read through our [contributing guidelines](https://github.com/tangyoha/telegram_media_downloader/blob/master/CONTRIBUTING.md) to learn about our submission process, coding rules and more.
+This project is a personal enhancement. Issues and PRs are welcome!
 
-### Want to Help?
+### Credits
 
-Want to file a bug, contribute some code, or improve documentation? Excellent! Read up on our guidelines for [contributing](https://github.com/tangyoha/telegram_media_downloader/blob/master/CONTRIBUTING.md).
-
-### Code of Conduct
-
-Help us keep Telegram Media Downloader open and inclusive. Please read and follow our [Code of Conduct](https://github.com/tangyoha/telegram_media_downloader/blob/master/CODE_OF_CONDUCT.md).
-
-
-### Sponsor
-
-[PayPal](https://paypal.me/tangyoha?country.x=C2&locale.x=zh_XC)
-
-<p>
-<img alt="Code style: black" style="width:30%" src="./screenshot/alipay.JPG">
-<img alt="Code style: black" style="width:30%" src="./screenshot/wechat.JPG">
-</p>
+This project is based on [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader), originally created by [tangyoha](https://github.com/tangyoha).  
+All credit for the original design and implementation goes to the original author.
