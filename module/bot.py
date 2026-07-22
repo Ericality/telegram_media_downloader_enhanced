@@ -1205,6 +1205,9 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     ]
 
     # --- Currently downloading files ---
+    active_downloading = 0
+    total_individual_speed = 0
+
     if download_result:
         msg_lines.append("")
         msg_lines.append("🔄 **Currently Downloading:**")
@@ -1215,6 +1218,14 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
                 down_byte = info.get("down_byte", 0)
                 speed = info.get("download_speed", 0)
 
+                active_downloading += 1
+                total_individual_speed += speed
+
+                # Show only filename basename for readability
+                display_name = os.path.basename(file_name)
+                if len(display_name) > 50:
+                    display_name = display_name[:47] + "..."
+
                 if total_size > 0:
                     pct = down_byte / total_size * 100
                     bar_len = 10
@@ -1224,60 +1235,64 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
                 else:
                     progress_str = f"{_format_size(down_byte)} (unknown total)"
 
-                msg_lines.append(f"  📁 `{file_name}`")
+                msg_lines.append(f"  📁 `{display_name}`")
                 msg_lines.append(f"     {progress_str} · {_format_size(speed)}/s")
     else:
         msg_lines.append("")
         msg_lines.append("🔄 **Currently Downloading:** None")
 
-    # Total download speed
-    if total_speed > 0:
-        msg_lines.append(f"  ⚡ Total speed: {_format_size(total_speed)}/s")
+    # Total speed — use sum of individual speeds for accuracy
+    if total_individual_speed > 0:
+        msg_lines.append(f"  ⚡ Total speed: {_format_size(total_individual_speed)}/s")
 
-    # --- Task nodes overview ---
+    # --- Task nodes overview (bot-commanded tasks) ---
+    bot_active = []
+    bot_finished = []
+    for task_id, node in _bot.task_node.items():
+        if node.is_running and not node.is_finish():
+            bot_active.append((task_id, node))
+        elif node.is_finish():
+            bot_finished.append((task_id, node))
+
+    # --- Config-driven download task progress ---
+    config_total = 0
+    config_finished = 0
+    config_active = 0
+    for chat_id, chat_config in _bot.app.chat_download_config.items():
+        node = chat_config.node
+        if node:
+            config_total += node.total_task
+            config_finished += node.finish_task if hasattr(node, 'finish_task') else 0
+            if node.is_running and not node.is_finish():
+                config_active += 1
+
     msg_lines.append("")
     msg_lines.append("━━━━━━━━━━━━━━━━━━━━━")
     msg_lines.append("📋 **Task Overview:**")
 
-    active_tasks = []
-    finished_tasks = []
-    for task_id, node in _bot.task_node.items():
-        if node.is_running and not node.is_finish():
-            active_tasks.append((task_id, node))
-        elif node.is_finish():
-            finished_tasks.append((task_id, node))
+    if config_total > 0:
+        msg_lines.append(f"  📥 Config download: {config_finished}/{config_total} completed, {active_downloading} downloading")
+    if bot_active:
+        msg_lines.append(f"  🤖 Bot-commanded tasks: {len(bot_active)} active / {len(bot_finished)} finished")
+    if config_total == 0 and not bot_active:
+        msg_lines.append(f"  ⏳ No active tasks")
 
-    if active_tasks:
-        msg_lines.append(f"  ⏳ Active tasks: {len(active_tasks)}")
-        for task_id, node in active_tasks[:10]:  # Cap at 10 to avoid message too long
+    if bot_active:
+        for task_id, node in bot_active[:10]:
             task_type = node.task_type.name if node.task_type else "Download"
             chat_title = node.replay_message[:30] if node.replay_message else f"chat {node.chat_id}"
             msg_lines.append(f"     • Task #{task_id} [{task_type}] {chat_title}")
-        if len(active_tasks) > 10:
-            msg_lines.append(f"     ... and {len(active_tasks) - 10} more")
-    else:
-        msg_lines.append(f"  ⏳ Active tasks: 0")
-
-    if finished_tasks:
-        msg_lines.append(f"  ✅ Finished tasks: {len(finished_tasks)}")
 
     # --- Config overview ---
     msg_lines.append("")
     msg_lines.append("━━━━━━━━━━━━━━━━━━━━━")
     msg_lines.append("⚙️ **Config Overview:**")
 
-    # Chats being downloaded
     if hasattr(_bot.app, 'chat_download_config'):
         chat_count = len(_bot.app.chat_download_config)
         msg_lines.append(f"  📡 Monitored chats: {chat_count}")
 
-    # Queue status if accessible
-    try:
-        from module.pyrogram_extension import get_max_concurrent_transmissions
-    except ImportError:
-        pass
-
-    msg_lines.append(f"  🏷️  Media types: {', '.join(_bot.app.media_types[:5])}")
+    msg_lines.append(f"  🏷️  Media types: {', '.join(_bot.app.media_types)}")
     if hasattr(_bot.app, 'upload_drive') and _bot.app.upload_drive.get('enable_upload_file'):
         msg_lines.append(f"  ☁️  Cloud upload: Enabled")
 
