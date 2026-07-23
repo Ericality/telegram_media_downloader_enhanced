@@ -1629,6 +1629,13 @@ async def download_task(client, message, node):
             except:
                 pass
 
+        # Clear download_result early so web UI doesn't count upload phase
+        try:
+            from module.download_stat import remove_download_record
+            await remove_download_record(node.chat_id, message.id)
+        except Exception as e:
+            logger.error(f"清除下载记录失败: {e}")
+
         if app.enable_download_txt and (message.text or message.caption):
             download_status, file_name = await save_msg_to_file(app, node.chat_id, message)
         else:
