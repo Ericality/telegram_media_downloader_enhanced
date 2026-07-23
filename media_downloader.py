@@ -122,6 +122,7 @@ class QueueManager:
 
 queue_manager = QueueManager()
 
+download_semaphore: asyncio.Semaphore = None
 download_queue: asyncio.Queue = None
 notify_queue: asyncio.Queue = None
 
@@ -1983,10 +1984,12 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
             logger.debug(f"下载Worker {worker_id} 处理消息 {message.id}")
 
             try:
-                if node.client:
-                    await download_task(node.client, message, node)
-                else:
-                    await download_task(client, message, node)
+                # Semaphore limits actual concurrent downloads to max_download_task
+                async with download_semaphore:
+                    if node.client:
+                        await download_task(node.client, message, node)
+                    else:
+                        await download_task(client, message, node)
 
                 # Task completed
                 logger.debug(f"下载Worker {worker_id} 完成消息 {message.id}")
@@ -1996,12 +1999,10 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                 raise
             except OSError as e:
                 logger.error(f"下载Worker {worker_id}: 消息 {message.id} 网络连接错误: {e}")
-                # Record to failed list for retry
                 retry_count = await record_failed_task(node.chat_id, message.id, f"Network error: {str(e)}")
                 logger.warning(f"Message {message.id} network error, recorded to failed list (retry count: {retry_count})")
             except Exception as e:
                 logger.error(f"下载Worker {worker_id}: 消息 {message.id} 下载任务异常: {e}")
-                # Record to failed list for retry
                 retry_count = await record_failed_task(node.chat_id, message.id, f"Download exception: {str(e)}")
                 logger.warning(f"Message {message.id} download exception, recorded to failed list (retry count: {retry_count})")
             finally:
@@ -2489,10 +2490,11 @@ def main():
         # Update queue manager limits
         queue_manager.update_limits()
 
-        # Re-initialize queues with configured sizes
-        global download_queue, notify_queue
+        # Re-initialize queues and semaphore with configured sizes
+        global download_queue, notify_queue, download_semaphore
         download_queue = asyncio.Queue(maxsize=queue_manager.download_queue_size)
         notify_queue = asyncio.Queue(maxsize=100)
+        download_semaphore = asyncio.Semaphore(queue_manager.max_download_tasks)
 
         logger.info(f"下载队列大小已设置为: {queue_manager.download_queue_size}")
 
