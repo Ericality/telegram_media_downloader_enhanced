@@ -92,7 +92,9 @@ BARK_LEVELS = {
 CONFIG_NAME = "config.yaml"
 DATA_FILE_NAME = "data.yaml"
 APPLICATION_NAME = "media_downloader"
+DEDUP_DB_FILE = "seen_media.json"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
+_media_seen: set = set()
 
 class QueueManager:
     """Download queue manager.
@@ -346,6 +348,32 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
     except Exception as e:
         logger.error(f"检查磁盘空间失败: {e}")
         return False, 0, 0
+
+
+def _load_seen_media() -> set:
+    """Load previously seen media IDs from disk."""
+    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    seen = set(data)
+                    logger.info(f"已加载 {len(seen)} 条媒体去重记录")
+                    return seen
+        except Exception as e:
+            logger.warning(f"加载媒体去重记录失败: {e}")
+    return set()
+
+
+def _save_seen_media(seen: set):
+    """Persist seen media IDs to disk."""
+    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    try:
+        with open(db_path, 'w', encoding='utf-8') as f:
+            json.dump(list(seen), f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"保存媒体去重记录失败: {e}")
 
 
 async def send_bark_notification_sync(
@@ -1674,6 +1702,16 @@ async def download_media(
 
     message = await fetch_message(client, message)
 
+    # Check dedup BEFORE download
+    for _type in media_types:
+        _media_check = getattr(message, _type, None)
+        if _media_check is not None:
+            media_uid = getattr(_media_check, 'file_unique_id', None)
+            if media_uid and media_uid in _media_seen:
+                logger.info(f"消息 {message.id}: 媒体已下载过（{media_uid}），跳过")
+                return DownloadStatus.SkipDownload, None
+            break
+
     logger.debug(f"开始下载消息 {message.id}...")
 
     try:
@@ -1718,6 +1756,7 @@ async def download_media(
         logger.debug(f"消息 {message.id}: 没有媒体内容，跳过")
         return DownloadStatus.SkipDownload, None
 
+    # Dedup already checked at fetch_message step — record after success
     message_id = message.id
 
     for retry in range(3):
@@ -1754,6 +1793,12 @@ async def download_media(
                 _check_download_finish(media_size, temp_download_path, ui_file_name)
                 await asyncio.sleep(0.5)
                 _move_to_download_path(temp_download_path, file_name)
+
+                # Mark media as seen for deduplication
+                media_uid = getattr(_media, 'file_unique_id', None)
+                if media_uid and media_uid not in _media_seen:
+                    _media_seen.add(media_uid)
+                    _save_seen_media(_media_seen)
 
                 logger.success(f"消息 {message.id}: 下载成功 - {ui_file_name}")
                 return DownloadStatus.SuccessDownload, file_name
@@ -2415,6 +2460,9 @@ def main():
         # Initialize application
         app.pre_run()
         init_web(app)
+
+        global _media_seen
+        _media_seen = _load_seen_media()
 
         # Print config summary
         print_config_summary(app)
