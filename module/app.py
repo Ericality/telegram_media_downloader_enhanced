@@ -612,6 +612,16 @@ class Application:
                     os.environ.pop("DEBUG")
                 logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
 
+        # Persist cleaned config dict for subsequent in-place updates
+        # (includes all original keys + notification transformations + unknown keys)
+        self.config = _config
+
+        # Remove legacy keys once — subsequent update_config() writes won't need this
+        old_keys = ["ids_to_retry", "chat_id", "download_filter"]
+        for key in old_keys:
+            if key in self.config:
+                self.config.pop(key)
+
         return True
 
     def _process_special_configs(self, _config: dict):
@@ -925,21 +935,13 @@ class Application:
 
     # pylint: disable = R0912
     def update_config(self, immediate: bool = True):
+        """Update last_read_message_id in in-memory config and write to file."""
         try:
-            logger.info("Start updating config")
-
-            # Read current config as base
-            current_config = {}
-            yaml_loader = YAML(typ='safe')
-            yaml_loader.allow_duplicate_keys = True
-            if os.path.exists(self.config_file):
-                try:
-                    with open(self.config_file, 'r', encoding='utf-8') as f:
-                        current_config = yaml_loader.load(f) or {}
-                except Exception as e:
-                    logger.warning(f"读取当前配置文件失败: {e}，将使用空配置作为基础")
-            else:
-                logger.debug("配置文件不存在，将创建新配置")
+            # In-place update using config dict populated by assign_config()
+            config = self.config
+            if not config:
+                logger.warning("配置为空，跳过更新")
+                return False
 
             # Build lookup for new last_read_message_id values
             id_to_new_value = {}
@@ -947,15 +949,14 @@ class Application:
                 id_to_new_value[chat_id] = chat_conf.last_read_message_id
 
             # Update last_read_message_id in existing chat config list (preserve all entries)
-            if 'chat' in current_config and isinstance(current_config['chat'], list):
-                for chat_entry in current_config['chat']:
+            if 'chat' in config and isinstance(config['chat'], list):
+                for chat_entry in config['chat']:
                     if isinstance(chat_entry, dict) and 'chat_id' in chat_entry:
                         cid = chat_entry['chat_id']
                         if cid in id_to_new_value:
                             chat_entry['last_read_message_id'] = id_to_new_value[cid]
             else:
-                # Fallback: if no chat key exists, build from scratch
-                current_config['chat'] = [
+                config['chat'] = [
                     {'chat_id': cid, 'last_read_message_id': conf.last_read_message_id}
                     for cid, conf in self.chat_download_config.items()
                 ]
@@ -963,19 +964,13 @@ class Application:
             updated_count = len(id_to_new_value)
 
             if hasattr(self, 'language'):
-                current_config['language'] = self.language.name
-
-            # Remove legacy fields
-            old_keys = ["ids_to_retry", "chat_id", "download_filter"]
-            for key in old_keys:
-                if key in current_config:
-                    current_config.pop(key)
+                config['language'] = self.language.name
 
             if not immediate:
                 logger.info(f"跳过写入配置，更新了 {updated_count} 个聊天")
                 return updated_count > 0
 
-            # Backup config to persistent directory
+            # Backup config
             backup_dir = self.session_file_path
             os.makedirs(backup_dir, exist_ok=True)
             base_name = os.path.basename(self.config_file)
@@ -985,28 +980,22 @@ class Application:
                 if os.path.exists(self.config_file):
                     shutil.copy2(self.config_file, backup_path)
                     logger.debug(f"已备份配置到: {backup_path}")
-                else:
-                    logger.debug("配置文件不存在，跳过备份")
             except Exception as e:
                 logger.error(f"备份配置文件失败: {e}，将尝试继续写入")
 
-            # Write directly to original file (overwrite)
+            # Write to file
             try:
                 yaml_writer = YAML()
                 yaml_writer.allow_unicode = True
                 yaml_writer.sort_keys = False
                 with open(self.config_file, 'w', encoding='utf-8') as f:
-                    yaml_writer.dump(current_config, f)
+                    yaml_writer.dump(config, f)
                 logger.success(f"✅ 配置更新成功，更新了 {updated_count} 个聊天的进度")
-
-                # Sync in-memory config
-                self.config = current_config
 
                 self._clean_old_backups(backup_dir, base_name, keep=3)
                 return True
             except Exception as e:
                 logger.exception(f"写入配置文件失败: {e}")
-                # Attempt restore from backup
                 if os.path.exists(backup_path):
                     try:
                         shutil.copy2(backup_path, self.config_file)
