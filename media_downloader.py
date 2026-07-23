@@ -1408,122 +1408,115 @@ async def _get_media_meta(
 async def add_download_task(
         message: pyrogram.types.Message,
         node: TaskNode,
-        is_retry: bool = False,               # Whether this is a retry task
-        max_wait_time: int = 3600
+        is_retry: bool = False,
 ) -> bool:
-    """Add download task to queue with blocking put."""
+    """Add download task to queue — blocks until a free slot is available."""
     if message.empty:
         return False
 
-    start_time = time.time()
-    last_notification_time = 0
+    if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+        logger.debug(f"程序正在退出，跳过添加任务: message_id={message.id}")
+        return False
 
-    while True:
-        if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
-            logger.debug(f"程序正在退出，跳过添加任务: message_id={message.id}")
-            return False
+    try:
+        # Block on queue.put() until a worker takes a task (natural backpressure)
+        put_start = time.time()
+        await download_queue.put((message, node))
+        wait_seconds = time.time() - put_start
 
-        try:
-            await asyncio.wait_for(download_queue.put((message, node)), timeout=1.0)
+        async with queue_manager.lock:
+            node.download_status[message.id] = DownloadStatus.Downloading
+            node.total_task += 1
+            queue_manager.task_added += 1
 
-            async with queue_manager.lock:
-                node.download_status[message.id] = DownloadStatus.Downloading
-                node.total_task += 1
-                queue_manager.task_added += 1
+            if not is_retry:
+                chat_id_str = str(node.chat_id)
+                chat_config = app.chat_download_config.get(node.chat_id) or app.chat_download_config.get(chat_id_str)
+                if chat_config:
+                    try:
+                        message_id_int = int(message.id)
+                        current_last_id = getattr(chat_config, 'last_read_message_id', 0)
+                        if current_last_id is None:
+                            current_last_id = 0
+                        current_last_id = int(current_last_id)
+                        if message_id_int > current_last_id:
+                            chat_config.last_read_message_id = message_id_int
+                            logger.debug(f"更新聊天 {node.chat_id} 的 last_read_message_id 到 {message_id_int}")
+                            app.update_config(immediate=True)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"更新 last_read_message_id 时出错: {e}")
 
-                # Only update last_read_message_id for non-retry tasks
-                if not is_retry:
-                    chat_id_str = str(node.chat_id)
-                    chat_config = app.chat_download_config.get(node.chat_id) or app.chat_download_config.get(chat_id_str)
-                    if chat_config:
-                        try:
-                            message_id_int = int(message.id)
-                            current_last_id = getattr(chat_config, 'last_read_message_id', 0)
-                            if current_last_id is None:
-                                current_last_id = 0
-                            current_last_id = int(current_last_id)
-                            if message_id_int > current_last_id:
-                                chat_config.last_read_message_id = message_id_int
-                                logger.debug(f"更新聊天 {node.chat_id} 的 last_read_message_id 到 {message_id_int}")
-                                app.update_config(immediate=True)
-                        except (ValueError, TypeError) as e:
-                            logger.error(f"更新 last_read_message_id 时出错: {e}")
+        await remove_failed_task(node.chat_id, message.id)
 
-            # Remove from failed list whether retry or not, since task is now queued
-            await remove_failed_task(node.chat_id, message.id)
+        if wait_seconds > 60:
+            logger.warning(f"任务添加等待 {int(wait_seconds)} 秒: message_id={message.id}")
+        logger.debug(f"已添加{'重试' if is_retry else ''}下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
+        return True
 
-            logger.debug(f"已添加{'重试' if is_retry else ''}下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
-            return True
+    except asyncio.CancelledError:
+        logger.info(f"添加任务被取消: message_id={message.id}")
+        await record_failed_task(node.chat_id, message.id, "添加任务被取消")
+        return False
+    except Exception as e:
+        logger.error(f"添加下载任务异常: {e}")
+        await record_failed_task(node.chat_id, message.id, f"添加异常: {e}")
+        return False
 
-        except asyncio.TimeoutError:
-            current_wait_time = time.time() - start_time
-            queue_capacity = queue_manager.download_queue_size
-            current_size = download_queue.qsize()
-
-            if current_wait_time > 30 and int(current_wait_time) % 30 == 0:
-                logger.debug(f"队列满，等待任务添加: message_id={message.id}, 已等待{int(current_wait_time)}秒")
-
-            if current_wait_time > max_wait_time and current_wait_time - last_notification_time > 3600:
-                wait_minutes = int(current_wait_time / 60)
-                await notification_manager.send_queue_notification(current_size, queue_capacity, wait_minutes)
-                last_notification_time = current_wait_time
-                logger.warning(f"任务添加等待时间过长: message_id={message.id}, 已等待{wait_minutes}分钟")
-
-            continue
-
-        except asyncio.CancelledError:
-            logger.info(f"添加任务被取消: message_id={message.id}")
-            await record_failed_task(node.chat_id, message.id, "添加任务被取消")
-            return False
-        except Exception as e:
-            logger.error(f"添加下载任务异常: {e}")
-            await record_failed_task(node.chat_id, message.id, f"添加异常: {e}")
-            return False
-
-async def retry_producer(chat_id: Union[int, str], node: TaskNode, client: pyrogram.Client):
-    """
-    Continuous retry producer: feeds failed tasks to queue at a 1:4 ratio with new tasks.
-    """
+async def retry_producer(client: pyrogram.Client):
+    """Global retry producer: scans all chats for failed tasks and retries them."""
     retry_ratio = 4
     new_task_count = 0
 
     while getattr(app, 'is_running', True) and not getattr(app, 'force_exit', False):
         try:
-            if download_queue.qsize() < queue_manager.download_queue_size:
-                if new_task_count >= retry_ratio:
-                    failed_tasks = await load_failed_tasks(chat_id)
-                    if failed_tasks:
-                        task = failed_tasks[0]
-                        msg_id = task['message_id']
-                        try:
-                            msg = await client.get_messages(chat_id, msg_id)
-                            if msg is not None:
-                                success = await add_download_task(msg, node, is_retry=True)
-                                if success:
-                                    await remove_failed_task(chat_id, msg_id)
-                                    logger.info(f"重试生产者: 为聊天 {chat_id} 添加重试任务 {msg_id}")
-                                    new_task_count = 0
-                                else:
-                                    logger.debug(f"重试生产者: 添加重试任务 {msg_id} 失败")
-                            else:
-                                await remove_failed_task(chat_id, msg_id)
-                                logger.warning(f"重试生产者: 消息 {msg_id} 已不存在")
-                        except Exception as e:
-                            logger.error(f"重试生产者: 获取消息 {msg_id} 失败: {e}")
-                    else:
-                        new_task_count = 0
-                else:
-                    await asyncio.sleep(0.5)
-            else:
+            if download_queue.qsize() >= queue_manager.download_queue_size:
                 await asyncio.sleep(1)
+                continue
+
+            if new_task_count < retry_ratio:
+                new_task_count += 1
+                await asyncio.sleep(0.5)
+                continue
+
+            # Round-robin through all chats to find a failed task
+            retried = False
+            for chat_id, chat_config in list(app.chat_download_config.items()):
+                if not chat_config.node:
+                    continue
+                failed_tasks = await load_failed_tasks(chat_id)
+                if not failed_tasks:
+                    continue
+
+                task = failed_tasks[0]
+                msg_id = task['message_id']
+                try:
+                    msg = await client.get_messages(chat_id, msg_id)
+                    if msg is not None:
+                        success = await add_download_task(msg, chat_config.node, is_retry=True)
+                        if success:
+                            await remove_failed_task(chat_id, msg_id)
+                            logger.info(f"重试生产者: 为聊天 {chat_id} 添加重试任务 {msg_id}")
+                            new_task_count = 0
+                            retried = True
+                            break
+                        else:
+                            logger.debug(f"重试生产者: 添加重试任务 {msg_id} 失败")
+                    else:
+                        await remove_failed_task(chat_id, msg_id)
+                        logger.warning(f"重试生产者: 消息 {msg_id} 已不存在")
+                except Exception as e:
+                    logger.error(f"重试生产者: 获取消息 {msg_id} 失败: {e}")
+
+            if not retried:
+                new_task_count = 0
             await asyncio.sleep(1)
         except asyncio.CancelledError:
-            logger.debug(f"重试生产者 {chat_id} 被取消")
+            logger.debug("重试生产者被取消")
             break
         except Exception as e:
-            logger.error(f"重试生产者 {chat_id} 异常: {e}")
+            logger.error(f"重试生产者异常: {e}")
             await asyncio.sleep(5)
-    logger.info(f"重试生产者 {chat_id} 退出")
+    logger.info("重试生产者退出")
 
 async def add_download_task_batch(
         messages: List[pyrogram.types.Message],
@@ -2057,27 +2050,16 @@ async def download_chat_task(
         chat_download_config.need_check = True
 
 async def download_all_chat(client: pyrogram.Client):
-    """Download all chats; start new-message producers and retry producers."""
-    # Step 1: Create proper TaskNode per chat (overwrite default chat_id=0)
+    """Process chats sequentially; start one global retry producer in background."""
     for chat_id, value in app.chat_download_config.items():
         value.node = TaskNode(chat_id=chat_id)
 
-    # Step 2: Start retry producers (long-running)
-    retry_tasks = []
-    for chat_id, value in app.chat_download_config.items():
-        if value.node:
-            retry_task = app.loop.create_task(retry_producer(chat_id, value.node, client))
-            retry_tasks.append(retry_task)
+    # Start one global retry producer (long-running background task)
+    retry_task = app.loop.create_task(retry_producer(client))
 
-    # Step 3: Start new-message producers (one per chat, exit when done)
-    new_msg_tasks = []
+    # Process chats sequentially — natural single-producer backpressure
     for chat_id, value in app.chat_download_config.items():
-        # Pass explicit chat_id to download_chat_task
-        task = app.loop.create_task(download_chat_task(client, chat_id, value, value.node))
-        new_msg_tasks.append(task)
-
-    # Wait for all new-message producers to complete
-    await asyncio.gather(*new_msg_tasks, return_exceptions=True)
+        await download_chat_task(client, chat_id, value, value.node)
 
     logger.info("所有新消息生产者已完成，重试生产者将继续运行")
 
