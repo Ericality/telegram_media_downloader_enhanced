@@ -625,16 +625,8 @@ class Application:
         return True
 
     def _process_special_configs(self, _config: dict):
-        """Process config items requiring special logic"""
-        # Extract and set special config items
-        if "save_path" in _config:
-            self.save_path = _config["save_path"]
-
-        # Media types and file formats are mandatory
-        if "media_types" in _config:
-            self.media_types = _config["media_types"]
-        if "file_formats" in _config:
-            self.file_formats = _config["file_formats"]
+        """Process config items requiring special logic (currently none — all handled by schema)"""
+        pass
 
     def _process_general_configs(self, _config: dict):
         """Process general config items"""
