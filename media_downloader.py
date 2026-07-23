@@ -1985,11 +1985,14 @@ async def download_chat_task(
         chat_download_config: ChatDownloadConfig,
         node: TaskNode,
 ):
-    """Producer: add new messages to download queue (failed tasks handled by retry_producer)."""
+    """Producer: feed new messages to download queue one-by-one.
+    
+    Uses add_download_task() which blocks on queue.put() when full,
+    creating natural backpressure — producer waits for workers to free slots.
+    """
     try:
         logger.info(f"开始处理聊天 {chat_id}，last_read_message_id={chat_download_config.last_read_message_id}")
 
-        # Fetch new messages
         messages_iter = get_chat_history_v2(
             client,
             chat_id,
@@ -2001,17 +2004,16 @@ async def download_chat_task(
 
         chat_download_config.node = node
 
-        batch_messages = []
-        batch_size = queue_manager.download_queue_size
-
         async for message in messages_iter:
             logger.debug(f"处理消息 {message.id}")
 
-            # Check if message should be skipped
+            if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+                logger.info(f"生产者收到退出信号，停止添加新任务")
+                break
+
             if app.need_skip_message(chat_download_config, message.id):
                 continue
 
-            # Check if message matches filter
             meta_data = MetaData()
             caption = message.caption
             if caption:
@@ -2025,19 +2027,14 @@ async def download_chat_task(
             set_meta_data(meta_data, message, caption)
 
             if app.exec_filter(chat_download_config, meta_data):
-                batch_messages.append(message)
+                # Blocking add — waits for a free queue slot (backpressure)
+                success = await add_download_task(message, node)
+                if not success:
+                    logger.debug(f"跳过添加消息 {message.id}（添加失败）")
+                    continue
 
-                if len(batch_messages) >= batch_size:
-                    logger.info(f"批量添加 {len(batch_messages)} 个消息...")
-                    added = await add_download_task_batch(batch_messages, node)
-                    batch_messages = []
-
-                    if node.total_task % 100 == 0:
-                        logger.info(f"已添加 {node.total_task} 个新任务到队列...")
-
-                    if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
-                        logger.info(f"生产者收到退出信号，停止添加新任务")
-                        break
+                if node.total_task % 100 == 0:
+                    logger.info(f"聊天 {chat_id} 已添加 {node.total_task} 个新任务...")
             else:
                 node.download_status[message.id] = DownloadStatus.SkipDownload
                 if message.media_group_id:
@@ -2049,11 +2046,6 @@ async def download_chat_task(
                         message,
                         DownloadStatus.SkipDownload,
                     )
-
-        # Add remaining messages
-        if batch_messages and not getattr(app, 'force_exit', False):
-            logger.info(f"添加剩余 {len(batch_messages)} 个消息...")
-            added = await add_download_task_batch(batch_messages, node)
 
         chat_download_config.need_check = True
         chat_download_config.total_task = node.total_task
