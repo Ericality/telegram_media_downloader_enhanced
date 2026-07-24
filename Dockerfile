@@ -21,4 +21,7 @@ COPY setup.py media_downloader.py /app/
 COPY module /app/module
 COPY utils /app/utils
 
+# Allow any user to write parser cache files (PLY generates these at runtime)
+RUN chmod -R 777 /app/module
+
 CMD ["python", "media_downloader.py"]
