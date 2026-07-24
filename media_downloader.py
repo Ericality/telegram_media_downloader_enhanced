@@ -820,7 +820,7 @@ async def disk_space_monitor_task():
 
             has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
             current_time = time.time()
-            notification_cooldown = 300  # 5 minutes between disk space alerts
+            notification_cooldown = 3600
 
             if not has_space:
                 disk_monitor.space_low = True
