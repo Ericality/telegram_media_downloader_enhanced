@@ -238,15 +238,13 @@ class NotificationManager:
         if has_space:
             title = "磁盘空间充足"
             message = f"✅ 磁盘空间充足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
-            event_type = "disk_space_ok"
             level = "info"
         else:
             title = "磁盘空间不足"
             message = f"⚠️ 磁盘空间不足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
-            event_type = "disk_space_low"
             level = "warning"
 
-        return await self.send_event_notification(event_type, title, message, level)
+        return await self.send_event_notification("disk_space", title, message, level)
 
     async def send_queue_notification(self, current_size: int, capacity: int,
                                       wait_time_minutes: int = None):
@@ -822,7 +820,7 @@ async def disk_space_monitor_task():
 
             has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
             current_time = time.time()
-            notification_cooldown = 3600
+            notification_cooldown = 300  # 5 minutes between disk space alerts
 
             if not has_space:
                 disk_monitor.space_low = True
