@@ -240,15 +240,46 @@ class CloudDrive:
                     logger.warning("未检测到 100% 进度，但进程正常结束且源文件不在，视为成功")
                     success = True
 
-            # Post-success cleanup
+            # Post-success: verify remote file actually exists before declaring victory
             if success:
+                remote_file_basename = os.path.basename(local_file_path)
+                remote_file_path = f"{remote_dir.rstrip('/')}/{remote_file_basename}"
+
+                logger.debug(f"验证远程文件: {remote_file_path}")
+                verify_cmd = f'"{drive_config.rclone_path}" lsf "{remote_file_path}" --files-only'
+                verify_proc = await asyncio.create_subprocess_shell(
+                    verify_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
+                remote_listing = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
+
+                if not remote_listing or verify_proc.returncode != 0:
+                    # Exact path match failed — try listing the remote directory
+                    verify_cmd2 = f'"{drive_config.rclone_path}" lsf "{remote_dir.rstrip("/")}/" --files-only'
+                    verify_proc2 = await asyncio.create_subprocess_shell(
+                        verify_cmd2,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    verify_stdout2, _ = await asyncio.wait_for(verify_proc2.communicate(), timeout=15)
+                    remote_listing2 = verify_stdout2.decode(errors="replace").strip() if verify_stdout2 else ""
+
+                    if remote_file_basename in remote_listing2:
+                        logger.info(f"远程文件已确认存在: {remote_file_basename}")
+                    else:
+                        logger.error(f"远程文件验证失败: 文件未在远程目录中找到, {remote_file_path}")
+                        return False
+                else:
+                    logger.info(f"远程文件已确认存在: {remote_listing}")
+
                 drive_config.total_upload_success_file_count += 1
                 logger.info(f"上传成功: {local_file_path} -> {remote_dir}")
 
-                # If using move, rclone should have deleted source; verify
+                # Delete local file after confirmed remote existence
                 if rclone_action == "move":
                     if os.path.exists(file_to_upload):
-                        logger.warning(f"move 后本地文件仍存在，尝试手动删除: {file_to_upload}")
                         try:
                             os.remove(file_to_upload)
                             logger.info(f"手动删除本地文件: {file_to_upload}")
@@ -261,11 +292,9 @@ class CloudDrive:
                     except Exception as e:
                         logger.warning(f"删除本地文件失败: {e}")
 
-                # Remove zip file
                 if drive_config.before_upload_file_zip and zip_file_path and os.path.exists(zip_file_path):
                     try:
                         os.remove(zip_file_path)
-                        logger.debug(f"已删除压缩文件: {zip_file_path}")
                     except Exception as e:
                         logger.warning(f"删除压缩文件失败: {e}")
 
