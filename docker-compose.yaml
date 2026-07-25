@@ -6,9 +6,11 @@ services:
     build: .
     ports:
       - "5001:5000"
+    environment:
+      - RCLONE_CONFIG=/root/.config/rclone/rclone.conf
     volumes:
       - "./downloads/:/app/downloads/"
-      - "$HOME/.config/rclone/:$HOME/.config/rclone/"
+      - "$HOME/.config/rclone/:/root/.config/rclone/"
       - "./config.yaml:/app/config.yaml"
       - "./data.yaml:/app/data.yaml"
       - "./log/:/app/log/"
