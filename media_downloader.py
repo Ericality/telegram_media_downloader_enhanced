@@ -50,6 +50,7 @@ from module.pyrogram_extension import (
 )
 from module.web import init_web
 from utils.format import truncate_filename, validate_title
+from module.cloud_drive import verify_rclone_remote
 from utils.log import LogFilter
 from utils.meta import print_meta
 from utils.meta_data import MetaData
@@ -2481,6 +2482,16 @@ def main():
                 logger.warning(f"  {i}. {issue}")
         else:
             logger.success("配置检查通过!")
+
+        # Verify cloud storage connectivity if upload is enabled
+        if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
+            from module.cloud_drive import verify_rclone_remote
+            cloud_ok, cloud_msg = app.loop.run_until_complete(verify_rclone_remote(app.cloud_drive_config))
+            if cloud_ok:
+                logger.success(f"☁️  {cloud_msg}")
+            else:
+                logger.error(f"☁️  {cloud_msg}")
+                issues.append(cloud_msg)
 
         # Initialize Pyrogram client
         client = HookClient(

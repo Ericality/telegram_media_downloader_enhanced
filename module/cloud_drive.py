@@ -47,6 +47,58 @@ class CloudDriveConfig:
             CloudDrive.init_upload_adapter(self)
 
 
+async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
+    """Check if the configured rclone remote is accessible.
+    
+    Returns:
+        (success: bool, message: str)
+    """
+    try:
+        # Extract the root of the remote path (e.g., "OneDriveEricalitySha:" from "OneDriveEricalitySha:telegram/downloads")
+        root_remote = drive_config.remote_dir.split(":")[0] + ":"
+        
+        cmd = f'"{drive_config.rclone_path}" lsd "{root_remote}" --max-depth 1 --fast-list'
+        logger.info(f"验证 Rclone 远程存储: {root_remote}")
+        
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout_text = stdout.decode(errors="replace") if stdout else ""
+        stderr_text = stderr.decode(errors="replace") if stderr else ""
+        
+        if proc.returncode == 0:
+            # Try to ensure remote subdirectory exists
+            subdir_cmd = f'"{drive_config.rclone_path}" mkdir "{drive_config.remote_dir.rstrip("/")}/"'
+            subdir_proc = await asyncio.create_subprocess_shell(
+                subdir_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await asyncio.wait_for(subdir_proc.communicate(), timeout=15)
+            # mkdir may return non-zero if directory already exists — that's OK
+            
+            return True, f"远程存储 {root_remote} 验证成功"
+        elif "didn't find section in config file" in stderr_text + stdout_text:
+            return False, f"Rclone 配置文件未找到或缺少 [{root_remote.strip(':')}] 配置段。请检查 rclone 配置。"
+        elif "FAILED" in stderr_text + stdout_text:
+            error_detail = (stderr_text + stdout_text).split("\n")[0][:200]
+            return False, f"无法连接到远程存储 {root_remote}: {error_detail}"
+        else:
+            error_detail = (stderr_text or stdout_text or "未知错误").strip()[:200]
+            return False, f"Rclone 验证失败 (exit={proc.returncode}): {error_detail}"
+        
+    except asyncio.TimeoutError:
+        return False, f"Rclone 验证超时（30秒），远程存储 {drive_config.remote_dir} 无响应"
+    except FileNotFoundError:
+        return False, f"Rclone 可执行文件不存在: {drive_config.rclone_path}"
+    except Exception as e:
+        return False, f"Rclone 验证异常: {e}"
+
+
 class CloudDrive:
     """rclone support"""
 
