@@ -173,7 +173,7 @@ class CloudDrive:
             rclone_action = "move" if drive_config.after_upload_file_delete else "copy"
             cmd = (
                 f'"{drive_config.rclone_path}" {rclone_action} "{file_to_upload}" '
-                f'"{remote_dir}/" --create-empty-src-dirs --ignore-existing --progress'
+                f'"{remote_dir}/" --create-empty-src-dirs --progress'
             )
             logger.info(f"执行 rclone 命令: {cmd}")
 
@@ -228,17 +228,17 @@ class CloudDrive:
                 logger.error(f"rclone 进程退出码: {returncode}, stderr: {stderr}")
                 return False
 
-            # No 100% detected but exit clean; infer success
+            # No 100% progress detected — verify actual outcome
             if not success:
                 if rclone_action == "move" and not os.path.exists(file_to_upload):
                     logger.info("使用 move 且源文件已不存在，认为上传成功")
                     success = True
-                elif returncode == 0:
-                    logger.warning("未检测到 100% 进度，但进程正常结束，可能文件已存在或跳过了上传，视为成功")
-                    success = True
-                else:
-                    logger.error("上传失败，未检测到成功标志且进程非正常结束")
+                elif os.path.exists(file_to_upload):
+                    logger.error(f"上传失败：未检测到 100% 进度且源文件仍在，{file_to_upload}")
                     return False
+                else:
+                    logger.warning("未检测到 100% 进度，但进程正常结束且源文件不在，视为成功")
+                    success = True
 
             # Post-success cleanup
             if success:

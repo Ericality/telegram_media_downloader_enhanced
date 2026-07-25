@@ -2532,17 +2532,17 @@ def main():
         app.loop.run_until_complete(send_startup_notification())
 
         # Verify cloud storage connectivity and notify on failure
-        async def run_cloud_verification():
+        async def verify_cloud():
             if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
                 from module.cloud_drive import verify_rclone_remote
-                cloud_ok, cloud_msg = app.loop.run_until_complete(verify_rclone_remote(app.cloud_drive_config))
+                cloud_ok, cloud_msg = await verify_rclone_remote(app.cloud_drive_config)
                 if cloud_ok:
                     logger.success(f"☁️  {cloud_msg}")
                 else:
                     logger.error(f"☁️  {cloud_msg}")
                     await notification_manager.send_event_notification("startup", "云端存储连接失败", cloud_msg, "warning")
 
-        app.loop.run_until_complete(run_cloud_verification())
+        app.loop.run_until_complete(verify_cloud())
 
         # Set global exception handler
         def global_exception_handler(loop, context):
