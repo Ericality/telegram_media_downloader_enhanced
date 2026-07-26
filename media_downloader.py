@@ -98,6 +98,8 @@ DUPLICATE_COUNT_FILE = "duplicate_count.json"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 _media_seen: set = set()
 _media_download_count: Dict[str, int] = {}
+# Cloud upload health: False = upload verification failed, download workers pause
+cloud_upload_ok: bool = True
 
 class QueueManager:
     """Download queue manager.
@@ -1971,6 +1973,22 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
             break
 
         try:
+            # Check cloud upload health before disk check
+            if not getattr(app, 'force_exit', False):
+                if not cloud_upload_ok:
+                    if worker_id not in disk_monitor.paused_workers:
+                        logger.warning(f"下载Worker {worker_id}: 云端上传验证失败，暂停下载")
+                        disk_monitor.paused_workers.add(worker_id)
+                    if not getattr(app, 'force_exit', False):
+                        await asyncio.sleep(60)
+                        continue
+                    else:
+                        break
+                else:
+                    if worker_id in disk_monitor.paused_workers:
+                        logger.info(f"下载Worker {worker_id}: 云端连接恢复，继续下载")
+                        disk_monitor.paused_workers.discard(worker_id)
+
             # Check disk space (skip if exiting)
             if not getattr(app, 'force_exit', False):
                 bark_config = getattr(app, 'bark_notification', {})
@@ -2574,10 +2592,11 @@ def main():
                 if cloud_ok:
                     logger.success(f"☁️  {cloud_msg}")
                 else:
+                    global cloud_upload_ok
+                    cloud_upload_ok = False
                     logger.error(f"☁️  {cloud_msg}")
-                    # Notify but keep container alive for manual investigation
-                    await notification_manager.send_event_notification("startup", "☁️ 云端写入验证失败，下载继续但上传可能不工作", cloud_msg, "error")
-                    logger.warning("☁️ 云端写入测试失败：download worker 将继续运行，但上传到 OneDrive 可能失败")
+                    await notification_manager.send_event_notification("startup", "☁️ 云端写入验证失败，下载暂停", cloud_msg, "error")
+                    logger.warning("☁️ 云端写入测试失败：download worker 已暂停，等待云端恢复后自动继续")
 
         app.loop.run_until_complete(verify_cloud())
 
