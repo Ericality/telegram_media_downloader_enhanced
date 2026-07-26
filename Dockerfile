@@ -24,7 +24,7 @@ COPY utils /app/utils
 # Allow any user to write parser cache files (PLY generates these at runtime)
 RUN chmod -R 777 /app/module
 
-# Ensure /app is writable by any user (rclone needs ~/.cache/ when HOME=/app)
-RUN chmod 777 /app
+# Ensure /app is writable by any user (rclone needs ~/.cache/rclone/ for token refresh)
+RUN mkdir -p /app/.cache/rclone && chmod -R 777 /app
 
 CMD ["python", "media_downloader.py"]
