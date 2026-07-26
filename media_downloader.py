@@ -94,8 +94,9 @@ CONFIG_NAME = "config.yaml"
 DATA_FILE_NAME = "data.yaml"
 APPLICATION_NAME = "media_downloader"
 DEDUP_DB_FILE = "seen_media.json"
+DUPLICATE_COUNT_FILE = "duplicate_count.json"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
-_media_seen: set = set()
+_media_download_count: Dict[str, int] = {}
 
 class QueueManager:
     """Download queue manager.
@@ -350,30 +351,29 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
         return False, 0, 0
 
 
-def _load_seen_media() -> set:
-    """Load previously seen media IDs from disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+def _load_duplicate_count() -> Dict[str, int]:
+    """Load duplicate download counts from disk."""
+    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
     if os.path.exists(db_path):
         try:
             with open(db_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if isinstance(data, list):
-                    seen = set(data)
-                    logger.info(f"已加载 {len(seen)} 条媒体去重记录")
-                    return seen
+                if isinstance(data, dict):
+                    logger.info(f"已加载 {len(data)} 条重复下载计数记录")
+                    return data
         except Exception as e:
-            logger.warning(f"加载媒体去重记录失败: {e}")
-    return set()
+            logger.warning(f"加载重复下载计数记录失败: {e}")
+    return {}
 
 
-def _save_seen_media(seen: set):
-    """Persist seen media IDs to disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+def _save_duplicate_count(counts: Dict[str, int]):
+    """Persist duplicate download counts to disk."""
+    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
     try:
         with open(db_path, 'w', encoding='utf-8') as f:
-            json.dump(list(seen), f, ensure_ascii=False)
+            json.dump(counts, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logger.warning(f"保存媒体去重记录失败: {e}")
+        logger.warning(f"保存重复下载计数记录失败: {e}")
 
 
 async def send_bark_notification_sync(
@@ -1709,14 +1709,25 @@ async def download_media(
 
     message = await fetch_message(client, message)
 
-    # Check dedup BEFORE download
+    # Check dedup BEFORE download (with configurable threshold)
     for _type in media_types:
         _media_check = getattr(message, _type, None)
         if _media_check is not None:
             media_uid = getattr(_media_check, 'file_unique_id', None)
-            if media_uid and media_uid in _media_seen:
-                logger.info(f"消息 {message.id}: 媒体已下载过（{media_uid}），跳过")
-                return DownloadStatus.SkipDownload, None
+            if media_uid:
+                threshold = getattr(app, 'download_duplicate_threshold', 5)
+                current_count = _media_download_count.get(media_uid, 0)
+                if threshold > 0 and current_count >= threshold:
+                    logger.info(
+                        f"消息 {message.id}: 媒体已下载 {current_count} 次（阈值={threshold}），跳过下载"
+                    )
+                    if current_count > 0:
+                        _media_download_count[media_uid] = current_count + 1
+                        _save_duplicate_count(_media_download_count)
+                    return DownloadStatus.SkipDownload, None
+                # Track count even for first download
+                _media_download_count[media_uid] = current_count + 1
+                _save_duplicate_count(_media_download_count)
             break
 
     logger.debug(f"开始下载消息 {message.id}...")
@@ -2468,8 +2479,8 @@ def main():
         app.pre_run()
         init_web(app)
 
-        global _media_seen
-        _media_seen = _load_seen_media()
+        global _media_download_count
+        _media_download_count = _load_duplicate_count()
 
         # Print config summary
         print_config_summary(app)

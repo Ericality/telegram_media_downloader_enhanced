@@ -386,6 +386,7 @@ class ConfigSchema:
         "drop_no_audio_video": (False, bool, None),
         "enable_download_txt": (False, bool, None),
         "forward_limit": (33, int, None),
+        "download_duplicate_threshold": (5, int, None),
     }
 
     # Notification config schema
