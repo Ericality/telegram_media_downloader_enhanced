@@ -2566,10 +2566,7 @@ def main():
                 else:
                     logger.warning("启动通知发送失败")
 
-        # Run startup notification
-        app.loop.run_until_complete(send_startup_notification())
-
-        # Verify cloud storage connectivity and notify on failure
+        # Verify cloud storage connectivity FIRST, before startup notification
         async def verify_cloud():
             if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
                 from module.cloud_drive import verify_rclone_remote
@@ -2578,11 +2575,14 @@ def main():
                     logger.success(f"☁️  {cloud_msg}")
                 else:
                     logger.error(f"☁️  {cloud_msg}")
-                    await notification_manager.send_event_notification("startup", "云端存储连接失败，程序退出", cloud_msg, "error")
-                    logger.error("☁️ 云端上传验证失败，程序退出以避免本地磁盘被填满")
-                    sys.exit(1)
+                    # Notify but keep container alive for manual investigation
+                    await notification_manager.send_event_notification("startup", "☁️ 云端写入验证失败，下载继续但上传可能不工作", cloud_msg, "error")
+                    logger.warning("☁️ 云端写入测试失败：download worker 将继续运行，但上传到 OneDrive 可能失败")
 
         app.loop.run_until_complete(verify_cloud())
+
+        # Run startup notification
+        app.loop.run_until_complete(send_startup_notification())
 
         # Set global exception handler
         def global_exception_handler(loop, context):
