@@ -15,17 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc \
 
 # Install rclone from official binary (apt version uses Go 1.19 which has
 # TLS/HTTP2 compatibility issues with Microsoft OneDrive upload endpoints)
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && ARCH=$(uname -m) \
     && case "$ARCH" in \
          x86_64)  RCLONE_ARCH=amd64 ;; \
          aarch64) RCLONE_ARCH=arm64 ;; \
          *)       RCLONE_ARCH=amd64 ;; \
        esac \
-    && curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${RCLONE_ARCH}.deb" -o /tmp/rclone.deb \
+    && wget -q --no-check-certificate "https://downloads.rclone.org/v1.69.1/rclone-v1.69.1-linux-${RCLONE_ARCH}.deb" -O /tmp/rclone.deb \
     && dpkg -i /tmp/rclone.deb \
     && rm /tmp/rclone.deb \
-    && apt-get remove -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+    && apt-get remove -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 COPY setup.py media_downloader.py /app/
 COPY module /app/module
