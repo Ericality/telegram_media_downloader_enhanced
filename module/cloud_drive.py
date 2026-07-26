@@ -227,7 +227,8 @@ class CloudDrive:
             logger.info(f"执行 rclone 命令: {cmd}")
 
             proc = await asyncio.create_subprocess_shell(
-                cmd, shell=True, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                cmd, shell=True, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env=_rclone_env()
             )
 
             success = False
@@ -299,7 +300,8 @@ class CloudDrive:
                 verify_proc = await asyncio.create_subprocess_shell(
                     verify_cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_rclone_env()
                 )
                 verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
                 remote_listing = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
@@ -310,7 +312,8 @@ class CloudDrive:
                     verify_proc2 = await asyncio.create_subprocess_shell(
                         verify_cmd2,
                         stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
+                        stderr=asyncio.subprocess.PIPE,
+                        env=_rclone_env()
                     )
                     verify_stdout2, _ = await asyncio.wait_for(verify_proc2.communicate(), timeout=15)
                     remote_listing2 = verify_stdout2.decode(errors="replace").strip() if verify_stdout2 else ""

@@ -2578,7 +2578,9 @@ def main():
                     logger.success(f"☁️  {cloud_msg}")
                 else:
                     logger.error(f"☁️  {cloud_msg}")
-                    await notification_manager.send_event_notification("startup", "云端存储连接失败", cloud_msg, "warning")
+                    await notification_manager.send_event_notification("startup", "云端存储连接失败，程序退出", cloud_msg, "error")
+                    logger.error("☁️ 云端上传验证失败，程序退出以避免本地磁盘被填满")
+                    sys.exit(1)
 
         app.loop.run_until_complete(verify_cloud())
 
