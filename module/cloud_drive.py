@@ -48,7 +48,9 @@ class CloudDriveConfig:
 
 
 async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
-    """Check if the configured rclone remote is accessible.
+    """Check if the configured rclone remote is accessible (read + write).
+
+    Runs a full round-trip: list root → upload tiny file → verify → delete.
     
     Returns:
         (success: bool, message: str)
@@ -56,46 +58,80 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
     try:
         # Extract the root of the remote path (e.g., "OneDriveEricalitySha:" from "OneDriveEricalitySha:telegram/downloads")
         root_remote = drive_config.remote_dir.split(":")[0] + ":"
-        
-        cmd = f'"{drive_config.rclone_path}" lsd "{root_remote}" --max-depth 1 --fast-list'
-        logger.info(f"验证 Rclone 远程存储: {root_remote}")
-        
-        proc = await asyncio.create_subprocess_shell(
-            cmd,
+
+        # Ensure remote subdirectory exists
+        subdir_cmd = f'"{drive_config.rclone_path}" mkdir "{drive_config.remote_dir.rstrip("/")}/"'
+        subdir_proc = await asyncio.create_subprocess_shell(
+            subdir_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        stdout_text = stdout.decode(errors="replace") if stdout else ""
-        stderr_text = stderr.decode(errors="replace") if stderr else ""
-        
-        if proc.returncode == 0:
-            # Try to ensure remote subdirectory exists
-            subdir_cmd = f'"{drive_config.rclone_path}" mkdir "{drive_config.remote_dir.rstrip("/")}/"'
-            subdir_proc = await asyncio.create_subprocess_shell(
-                subdir_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            await asyncio.wait_for(subdir_proc.communicate(), timeout=15)
-            # mkdir may return non-zero if directory already exists — that's OK
-            
-            return True, f"远程存储 {root_remote} 验证成功"
-        elif "didn't find section in config file" in stderr_text + stdout_text:
-            return False, f"Rclone 配置文件未找到或缺少 [{root_remote.strip(':')}] 配置段。请检查 rclone 配置。"
-        elif "FAILED" in stderr_text + stdout_text:
-            error_detail = (stderr_text + stdout_text).split("\n")[0][:200]
-            return False, f"无法连接到远程存储 {root_remote}: {error_detail}"
-        else:
-            error_detail = (stderr_text or stdout_text or "未知错误").strip()[:200]
-            return False, f"Rclone 验证失败 (exit={proc.returncode}): {error_detail}"
-        
+        await asyncio.wait_for(subdir_proc.communicate(), timeout=15)
+        # mkdir may return non-zero if directory already exists — that's OK
+
+        # Write test: upload a tiny file
+        test_file = "/tmp/_rclone_verify_test.txt"
+        remote_test_path = f"{drive_config.remote_dir.rstrip('/')}/_rclone_verify_test.txt"
+
+        with open(test_file, "w") as f:
+            f.write("rclone verify test")
+
+        logger.info(f"验证 Rclone 远程存储写入: {remote_test_path}")
+        upload_cmd = f'"{drive_config.rclone_path}" copyto "{test_file}" "{remote_test_path}"'
+        upload_proc = await asyncio.create_subprocess_shell(
+            upload_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        upload_stdout, upload_stderr = await asyncio.wait_for(upload_proc.communicate(), timeout=60)
+
+        if upload_proc.returncode != 0:
+            err = (upload_stderr.decode(errors="replace") if upload_stderr else "上传失败").strip()[:300]
+            if os.path.exists(test_file):
+                os.remove(test_file)
+            return False, f"云端写入测试失败: {err}"
+
+        # Verify file exists
+        list_cmd = f'"{drive_config.rclone_path}" lsf "{remote_test_path}" --files-only'
+        list_proc = await asyncio.create_subprocess_shell(
+            list_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        list_stdout, _ = await asyncio.wait_for(list_proc.communicate(), timeout=15)
+        remote_listing = list_stdout.decode(errors="replace").strip() if list_stdout else ""
+
+        if not remote_listing:
+            # Clean up and report
+            if os.path.exists(test_file):
+                os.remove(test_file)
+            return False, f"测试文件上传后未在远程目录中找到: {remote_test_path}"
+
+        # Cleanup: delete test file from remote
+        delete_cmd = f'"{drive_config.rclone_path}" delete "{remote_test_path}"'
+        delete_proc = await asyncio.create_subprocess_shell(
+            delete_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await asyncio.wait_for(delete_proc.communicate(), timeout=15)
+        # delete failure is non-critical — log but don't block startup
+
+        # Cleanup local test file
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+        return True, f"远程存储 {root_remote} 读写验证成功（上传 → 确认 → 删除）"
+
     except asyncio.TimeoutError:
-        return False, f"Rclone 验证超时（30秒），远程存储 {drive_config.remote_dir} 无响应"
+        if os.path.exists(test_file):
+            os.remove(test_file)
+        return False, f"Rclone 验证超时（60秒），远程存储 {drive_config.remote_dir} 无响应"
     except FileNotFoundError:
         return False, f"Rclone 可执行文件不存在: {drive_config.rclone_path}"
     except Exception as e:
+        if os.path.exists(test_file):
+            os.remove(test_file)
         return False, f"Rclone 验证异常: {e}"
 
 
