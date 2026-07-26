@@ -98,31 +98,29 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
 
         upload_stderr_text = upload_stderr.decode(errors="replace") if upload_stderr else ""
         if upload_proc.returncode != 0:
-            logger.warning(f"copyto 退出码非零: {upload_proc.returncode}，stderr: {upload_stderr_text[:300]}，将尝试验证文件是否实际存在")
+            logger.warning(f"copyto 退出码非零: {upload_proc.returncode}，stderr: {upload_stderr_text[:300]}，将尝试验证文件内容")
 
-        # Verify file actually exists (tolerates non-zero exit from OneDrive multipart cancel noise)
-        list_cmd = f'"{drive_config.rclone_path}" lsf "{remote_test_path}" --files-only'
-        list_proc = await asyncio.create_subprocess_shell(
-            list_cmd,
+        # Read back uploaded content to verify (lsf can see 0-byte stubs on OneDrive)
+        verify_cmd = f'"{drive_config.rclone_path}" cat "{remote_test_path}"'
+        verify_proc = await asyncio.create_subprocess_shell(
+            verify_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=_rclone_env()
         )
-        list_stdout, _ = await asyncio.wait_for(list_proc.communicate(), timeout=15)
-        remote_listing = list_stdout.decode(errors="replace").strip() if list_stdout else ""
+        verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
+        # Re-read local test file content for comparison
+        with open(test_file, "r") as f:
+            expected = f.read()
+        uploaded_content = verify_stdout.decode(errors="replace") if verify_stdout else ""
 
-        if not remote_listing:
-            if upload_proc.returncode != 0:
-                err = upload_stderr_text.strip()[:300] if upload_stderr_text else "上传失败"
-            else:
-                err = f"测试文件上传后未在远程目录中找到: {remote_test_path}"
-            # Clean up and report
+        if uploaded_content != expected:
             if os.path.exists(test_file):
                 os.remove(test_file)
-            return False, f"云端写入测试失败: {err}"
+            return False, f"云端内容验证失败: 上传后读回的内容不匹配（本地={expected!r}, 远程={uploaded_content!r}）"
 
         if upload_proc.returncode != 0:
-            logger.info("copyto 退出码非零但远程文件已确认存在，视为验证成功")
+            logger.info("copyto 退出码非零但内容验证通过，视为验证成功")
 
         # Cleanup: delete test file from remote
         delete_cmd = f'"{drive_config.rclone_path}" delete "{remote_test_path}"'
@@ -226,6 +224,8 @@ class CloudDrive:
 
             # Choose rclone action
             rclone_action = "move" if drive_config.after_upload_file_delete else "copy"
+            # Record local file size before upload for post-upload verification
+            local_file_size = os.path.getsize(file_to_upload)
             cmd = (
                 f'"{drive_config.rclone_path}" {rclone_action} "{file_to_upload}" '
                 f'"{remote_dir}/" --create-empty-src-dirs --progress'
@@ -299,43 +299,37 @@ class CloudDrive:
                     logger.warning("未检测到 100% 进度，但进程结束且源文件不在，视为成功")
                     success = True
 
-            # Post-upload: verify remote file actually exists before declaring victory
-            # (this is the source of truth — tolerates non-zero rclone exit codes caused by
-            #  OneDrive multipart cancel 401 noise)
+            # Post-upload: verify remote file SIZE matches local (lsf is unreliable —
+            # OneDrive can show 0-byte stubs for failed multipart uploads)
             if success:
                 remote_file_basename = os.path.basename(local_file_path)
                 remote_file_path = f"{remote_dir.rstrip('/')}/{remote_file_basename}"
 
-                logger.debug(f"验证远程文件: {remote_file_path}")
-                verify_cmd = f'"{drive_config.rclone_path}" lsf "{remote_file_path}" --files-only'
+                logger.debug(f"验证远程文件大小: {remote_file_path}")
+                verify_cmd = f'"{drive_config.rclone_path}" size "{remote_file_path}"'
                 verify_proc = await asyncio.create_subprocess_shell(
                     verify_cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=_rclone_env()
                 )
-                verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
-                remote_listing = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
+                verify_stdout, verify_stderr = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
+                size_output = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
+                logger.debug(f"rclone size 输出: {size_output}")
 
-                if not remote_listing:
-                    # Exact path match failed — try listing the remote directory
-                    verify_cmd2 = f'"{drive_config.rclone_path}" lsf "{remote_dir.rstrip("/")}/" --files-only'
-                    verify_proc2 = await asyncio.create_subprocess_shell(
-                        verify_cmd2,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=_rclone_env()
+                # Parse "Total size: N B (N Bytes)" from rclone size output
+                import re as size_re
+                size_match = size_re.search(r"Total size:\s*(\d+)\s*(B|Bytes?)", size_output)
+                remote_size = int(size_match.group(1)) if size_match else -1
+
+                if remote_size != local_file_size:
+                    logger.error(
+                        f"远程文件大小验证失败: 本地={local_file_size}B, 远程={remote_size}B, "
+                        f"{remote_file_path}"
                     )
-                    verify_stdout2, _ = await asyncio.wait_for(verify_proc2.communicate(), timeout=15)
-                    remote_listing2 = verify_stdout2.decode(errors="replace").strip() if verify_stdout2 else ""
+                    return False
 
-                    if remote_file_basename in remote_listing2:
-                        logger.info(f"远程文件已确认存在: {remote_file_basename}")
-                    else:
-                        logger.error(f"远程文件验证失败: 文件未在远程目录中找到, {remote_file_path}")
-                        return False
-                else:
-                    logger.info(f"远程文件已确认存在: {remote_listing}")
+                logger.info(f"远程文件大小验证通过: {local_file_size}B / {remote_file_path}")
 
                 drive_config.total_upload_success_file_count += 1
                 logger.info(f"上传成功: {local_file_path} -> {remote_dir}")
