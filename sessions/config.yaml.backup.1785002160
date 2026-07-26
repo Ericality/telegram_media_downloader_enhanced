@@ -1,0 +1,104 @@
+api_hash: f4cd7f2247b6857efbdcb8a1b52f1942
+api_id: 28575190
+bot_token: 8491154690:AAFZXgPIZsPfuffcNUZyq-CUyKHnhrQE8oE
+chat:
+- chat_id: -1001920626155
+  last_read_message_id: 7877
+- chat_id: -1001828330390
+  last_read_message_id: 49284
+- chat_id: -1001981623647
+  last_read_message_id: 66401
+- chat_id: -1003015550965
+  last_read_message_id: 27
+media_types:
+- audio
+- document
+- photo
+- video
+- voice
+- animation
+file_formats:
+  audio:
+  - all
+  document:
+  - pdf
+  - epub
+  video:
+  - mp4
+save_path: /app/downloads
+file_path_prefix:
+- chat_title
+- media_datetime
+language: EN
+notifications:
+  bark:
+    enabled: true
+    url: https://api.day.app/KdFw9p3W6Swv9wrrHvxxt5/
+    default_group: TelegramDownloader
+    default_level: passive
+    events_to_notify:
+    - startup
+    - shutdown
+    - disk_space
+    disk_space_threshold_gb: 10.0
+    space_check_interval: 300
+    stats_notification_interval: 3600
+    notify_worker_count: 1
+    event_configs:
+      startup:
+        group: TelegramDownloader系统状态
+        level: passive
+      shutdown:
+        group: TelegramDownloader系统状态
+        level: passive
+      stats_summary:
+        group: TelegramDownloader统计报告
+        level: passive
+      task_paused:
+        group: TelegramDownloader任务警告
+        level: passive
+      disk_space:
+        group: TelegramDownloader系统警告
+        level: active
+      disk_space_low:
+        group: TelegramDownloader系统警告
+        level: active
+      queue_full:
+        group: TelegramDownloader系统警告
+        level: passive
+      queue_status:
+        group: TelegramDownloader统计报告
+        level: active
+  synology_chat:
+    enabled: true
+    webhook_url: https://ericality.myds.me:50011/webapi/entry.cgi?api=SYNO.Chat.External&method=incoming&version=2&token=%22s3k0OXrnp8Y8lyOIRqxbILqC5PkQiMzZXTPLf7VZNDjJ1aIhWltf9JGYmOiCWAMi%22
+    bot_name: Telegram下载器
+    bot_avatar: https://telegram.org/img/t_logo.png
+    default_level: info
+    events_to_notify:
+    - startup
+    - shutdown
+    - stats_summary
+    - task_paused
+    - disk_space
+    - queue_full
+    - queue_status
+    mention_users: []
+    mention_channels: []
+    disk_space_threshold_gb: 10.0
+    space_check_interval: 300
+  global:
+    stats_notification_interval: 1800
+    queue_monitor_interval: 1800
+    max_notification_retries: 3
+    default_timeout: 15
+log_level: DEBUG
+upload_drive:
+  enable_upload_file: true
+  upload_adapter: rclone
+  remote_dir: OneDriveEricalitySha:telegram/downloads
+  before_upload_file_zip: false
+  after_upload_file_delete: true
+  rclone_path: /usr/bin/rclone
+web_login_secret: Ericality
+enable_download_txt: true

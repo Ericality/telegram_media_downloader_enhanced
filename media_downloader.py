@@ -96,6 +96,7 @@ APPLICATION_NAME = "media_downloader"
 DEDUP_DB_FILE = "seen_media.json"
 DUPLICATE_COUNT_FILE = "duplicate_count.json"
 app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
+_media_seen: set = set()
 _media_download_count: Dict[str, int] = {}
 
 class QueueManager:
@@ -349,6 +350,32 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
     except Exception as e:
         logger.error(f"检查磁盘空间失败: {e}")
         return False, 0, 0
+
+
+def _load_seen_media() -> set:
+    """Load previously seen media IDs from disk."""
+    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    seen = set(data)
+                    logger.info(f"已加载 {len(seen)} 条媒体去重记录")
+                    return seen
+        except Exception as e:
+            logger.warning(f"加载媒体去重记录失败: {e}")
+    return set()
+
+
+def _save_seen_media(seen: set):
+    """Persist seen media IDs to disk."""
+    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    try:
+        with open(db_path, 'w', encoding='utf-8') as f:
+            json.dump(list(seen), f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"保存媒体去重记录失败: {e}")
 
 
 def _load_duplicate_count() -> Dict[str, int]:
