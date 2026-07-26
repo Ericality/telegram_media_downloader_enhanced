@@ -96,13 +96,11 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         )
         upload_stdout, upload_stderr = await asyncio.wait_for(upload_proc.communicate(), timeout=60)
 
+        upload_stderr_text = upload_stderr.decode(errors="replace") if upload_stderr else ""
         if upload_proc.returncode != 0:
-            err = (upload_stderr.decode(errors="replace") if upload_stderr else "上传失败").strip()[:300]
-            if os.path.exists(test_file):
-                os.remove(test_file)
-            return False, f"云端写入测试失败: {err}"
+            logger.warning(f"copyto 退出码非零: {upload_proc.returncode}，stderr: {upload_stderr_text[:300]}，将尝试验证文件是否实际存在")
 
-        # Verify file exists
+        # Verify file actually exists (tolerates non-zero exit from OneDrive multipart cancel noise)
         list_cmd = f'"{drive_config.rclone_path}" lsf "{remote_test_path}" --files-only'
         list_proc = await asyncio.create_subprocess_shell(
             list_cmd,
@@ -114,10 +112,17 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         remote_listing = list_stdout.decode(errors="replace").strip() if list_stdout else ""
 
         if not remote_listing:
+            if upload_proc.returncode != 0:
+                err = upload_stderr_text.strip()[:300] if upload_stderr_text else "上传失败"
+            else:
+                err = f"测试文件上传后未在远程目录中找到: {remote_test_path}"
             # Clean up and report
             if os.path.exists(test_file):
                 os.remove(test_file)
-            return False, f"测试文件上传后未在远程目录中找到: {remote_test_path}"
+            return False, f"云端写入测试失败: {err}"
+
+        if upload_proc.returncode != 0:
+            logger.info("copyto 退出码非零但远程文件已确认存在，视为验证成功")
 
         # Cleanup: delete test file from remote
         delete_cmd = f'"{drive_config.rclone_path}" delete "{remote_test_path}"'
@@ -166,6 +171,7 @@ class CloudDrive:
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env=_rclone_env(),
         ):
             pass
 
@@ -274,12 +280,15 @@ class CloudDrive:
             # Wait for process to finish
             returncode = await proc.wait()
             stderr = (await proc.stderr.read()).decode(errors="replace") if proc.stderr else ""
-            if returncode != 0:
-                logger.error(f"rclone 进程退出码: {returncode}, stderr: {stderr}")
-                return False
 
-            # No 100% progress detected — verify actual outcome
             if not success:
+                # rclone returned non-zero but we never detected 100% — check stderr for clues
+                if returncode != 0:
+                    logger.error(f"rclone 进程退出码: {returncode}（未检测到 100% 进度）, stderr: {stderr}")
+                    # OneDrive "cancel multipart upload: unauthenticated" is a false-negative;
+                    # the file may still have been uploaded successfully — check below.
+                else:
+                    logger.info(f"rclone 进程正常退出（未检测到 100% 进度）, stderr: {stderr}")
                 if rclone_action == "move" and not os.path.exists(file_to_upload):
                     logger.info("使用 move 且源文件已不存在，认为上传成功")
                     success = True
@@ -287,10 +296,12 @@ class CloudDrive:
                     logger.error(f"上传失败：未检测到 100% 进度且源文件仍在，{file_to_upload}")
                     return False
                 else:
-                    logger.warning("未检测到 100% 进度，但进程正常结束且源文件不在，视为成功")
+                    logger.warning("未检测到 100% 进度，但进程结束且源文件不在，视为成功")
                     success = True
 
-            # Post-success: verify remote file actually exists before declaring victory
+            # Post-upload: verify remote file actually exists before declaring victory
+            # (this is the source of truth — tolerates non-zero rclone exit codes caused by
+            #  OneDrive multipart cancel 401 noise)
             if success:
                 remote_file_basename = os.path.basename(local_file_path)
                 remote_file_path = f"{remote_dir.rstrip('/')}/{remote_file_basename}"
@@ -306,7 +317,7 @@ class CloudDrive:
                 verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
                 remote_listing = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
 
-                if not remote_listing or verify_proc.returncode != 0:
+                if not remote_listing:
                     # Exact path match failed — try listing the remote directory
                     verify_cmd2 = f'"{drive_config.rclone_path}" lsf "{remote_dir.rstrip("/")}/" --files-only'
                     verify_proc2 = await asyncio.create_subprocess_shell(
