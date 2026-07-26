@@ -47,6 +47,15 @@ class CloudDriveConfig:
             CloudDrive.init_upload_adapter(self)
 
 
+def _rclone_env() -> dict:
+    """Return environment dict with HOME and RCLONE_CONFIG for subprocess calls."""
+    env = os.environ.copy()
+    # Ensure HOME is set so rclone can write token cache to ~/.cache/rclone/
+    if "HOME" not in env or env.get("HOME") == "/":
+        env["HOME"] = "/app"
+    return env
+
+
 async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
     """Check if the configured rclone remote is accessible (read + write).
 
@@ -64,7 +73,8 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         subdir_proc = await asyncio.create_subprocess_shell(
             subdir_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env()
         )
         await asyncio.wait_for(subdir_proc.communicate(), timeout=15)
         # mkdir may return non-zero if directory already exists — that's OK
@@ -81,7 +91,8 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         upload_proc = await asyncio.create_subprocess_shell(
             upload_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env()
         )
         upload_stdout, upload_stderr = await asyncio.wait_for(upload_proc.communicate(), timeout=60)
 
@@ -96,7 +107,8 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         list_proc = await asyncio.create_subprocess_shell(
             list_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env()
         )
         list_stdout, _ = await asyncio.wait_for(list_proc.communicate(), timeout=15)
         remote_listing = list_stdout.decode(errors="replace").strip() if list_stdout else ""
@@ -112,7 +124,8 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         delete_proc = await asyncio.create_subprocess_shell(
             delete_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env()
         )
         await asyncio.wait_for(delete_proc.communicate(), timeout=15)
         # delete failure is non-critical — log but don't block startup
