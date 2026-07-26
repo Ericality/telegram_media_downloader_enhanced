@@ -317,9 +317,12 @@ class CloudDrive:
                 size_output = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
                 logger.debug(f"rclone size 输出: {size_output}")
 
-                # Parse "Total size: N B (N Bytes)" from rclone size output
+                # Parse rclone size output: "Total size: 230.068 KiB (235590 Byte)"
+                # Try parenthesized byte count first, then simple "N B" format
                 import re as size_re
-                size_match = size_re.search(r"Total size:\s*(\d+)\s*(B|Bytes?)", size_output)
+                size_match = size_re.search(r"\((\d+)\s*Bytes?\)", size_output)
+                if not size_match:
+                    size_match = size_re.search(r"Total size:\s*(\d+)\s*Bytes?", size_output)
                 remote_size = int(size_match.group(1)) if size_match else -1
 
                 if remote_size != local_file_size:
