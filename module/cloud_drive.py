@@ -379,24 +379,35 @@ class CloudDrive:
 
                 return True
             else:
-                # Upload failed — write a .upload_failed detail file for debugging
+                # Upload failed — append to single upload-failure log file
                 if os.path.exists(file_to_upload):
-                    failed_log = file_to_upload + ".upload_failed"
+                    failed_log = os.path.join(
+                        os.path.dirname(file_to_upload),
+                        "upload_failed.json"
+                    )
+                    entry = {
+                        "timestamp": datetime.now().isoformat(),
+                        "file": local_file_path,
+                        "remote_dir": remote_dir,
+                        "rclone_action": rclone_action,
+                        "rclone_exit_code": returncode,
+                        "rclone_stderr": stderr,
+                        "local_file_size": os.path.getsize(file_to_upload) if os.path.exists(file_to_upload) else -1
+                    }
                     try:
+                        records = []
+                        if os.path.exists(failed_log):
+                            with open(failed_log, "r", encoding="utf-8") as f:
+                                try:
+                                    records = json.load(f)
+                                except:
+                                    records = []
+                        records.append(entry)
                         with open(failed_log, "w", encoding="utf-8") as f:
-                            f.write(json.dumps({
-                                "timestamp": datetime.now().isoformat(),
-                                "file": local_file_path,
-                                "remote_dir": remote_dir,
-                                "rclone_action": rclone_action,
-                                "rclone_exit_code": returncode,
-                                "rclone_stderr": stderr,
-                                "local_file_exists": os.path.exists(file_to_upload),
-                                "local_file_size": os.path.getsize(file_to_upload) if os.path.exists(file_to_upload) else -1
-                            }, ensure_ascii=False, indent=2))
-                        logger.info(f"上传失败详情已保存: {failed_log}")
+                            json.dump(records, f, ensure_ascii=False, indent=2)
+                        logger.info(f"上传失败记录已追加: {failed_log}")
                     except Exception as e:
-                        logger.warning(f"保存上传失败详情失败: {e}")
+                        logger.warning(f"保存上传失败记录失败: {e}")
 
                 logger.error("上传失败，未达到成功条件")
                 return False

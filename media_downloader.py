@@ -1248,55 +1248,56 @@ async def record_failed_task(chat_id: Union[int, str], message_id: int, error_ms
     """Record a failed task for retry (no retry limit)."""
     try:
         failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
-        failed_tasks = {}
+        tasks = []
 
         if os.path.exists(failed_tasks_file):
             try:
                 with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-                    failed_tasks = json.load(f)
+                    loaded = json.load(f)
+                    tasks = loaded if isinstance(loaded, list) else []
+                    if not isinstance(loaded, list):
+                        logger.info("检测到旧版 failed_tasks.json 格式，将自动迁移")
             except:
-                failed_tasks = {}
+                tasks = []
 
-        chat_key = str(chat_id)
-        if chat_key not in failed_tasks:
-            failed_tasks[chat_key] = []
+        # Look up chat title
+        chat_title = str(chat_id)
+        try:
+            cfg = app.chat_download_config.get(chat_id) or app.chat_download_config.get(str(chat_id))
+            if cfg and cfg.node:
+                maybe = getattr(cfg.node, 'chat_title', None)
+                if maybe:
+                    chat_title = str(maybe)
+        except:
+            pass
 
-        # Check if task already exists in failed list
         existing_index = -1
-        for i, task in enumerate(failed_tasks[chat_key]):
-            if task['message_id'] == message_id:
+        for i, t in enumerate(tasks):
+            if str(t.get('chat_id')) == str(chat_id) and t.get('message_id') == message_id:
                 existing_index = i
                 break
 
-        task_entry = {
-            'message_id': message_id,
-            'chat_id': str(chat_id),
-            'error': error_msg[:500],
-            'timestamp': datetime.now().isoformat(),
-            'retry_count': 0
-        }
-
         if existing_index >= 0:
-            existing_task = failed_tasks[chat_key][existing_index]
-            existing_task['retry_count'] += 1
-            existing_task['timestamp'] = datetime.now().isoformat()
-            existing_task['error'] = error_msg[:500]
-            retry_count = existing_task['retry_count']
-            logger.warning(
-                f"更新失败任务: chat={chat_id}, message_id={message_id}, 重试次数: {retry_count}"
-            )
+            tasks[existing_index]['retry_count'] += 1
+            tasks[existing_index]['timestamp'] = datetime.now().isoformat()
+            tasks[existing_index]['error'] = error_msg[:500]
+            tasks[existing_index]['chat_title'] = chat_title
+            retry_count = tasks[existing_index]['retry_count']
+            logger.warning(f"更新失败任务: chat={chat_title}({chat_id}), message_id={message_id}, 重试次数: {retry_count}")
         else:
-            failed_tasks[chat_key].append(task_entry)
+            tasks.append({
+                'chat_id': str(chat_id),
+                'chat_title': chat_title,
+                'message_id': message_id,
+                'error': error_msg[:500],
+                'timestamp': datetime.now().isoformat(),
+                'retry_count': 0
+            })
             retry_count = 0
-            logger.warning(
-                f"记录新失败任务: chat={chat_id}, message_id={message_id}"
-            )
+            logger.warning(f"记录新失败任务: chat={chat_title}({chat_id}), message_id={message_id}")
 
-        # No limit on failed tasks — infinite retry
-
-        # Persist to file
         with open(failed_tasks_file, 'w', encoding='utf-8') as f:
-            json.dump(failed_tasks, f, ensure_ascii=False, indent=2)
+            json.dump(tasks, f, ensure_ascii=False, indent=2)
 
         return retry_count
     except Exception as e:
@@ -1305,52 +1306,46 @@ async def record_failed_task(chat_id: Union[int, str], message_id: int, error_ms
 
 
 async def load_failed_tasks(chat_id: Union[int, str]) -> list:
-    """Load failed tasks (no time filter, no retry limit)."""
+    """Load failed tasks for a given chat (flat-array format)."""
     try:
         failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
         if not os.path.exists(failed_tasks_file):
             return []
 
         with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-            all_failed_tasks = json.load(f)
+            all_tasks = json.load(f)
 
-        chat_key = str(chat_id)
-        if chat_key in all_failed_tasks:
-            # All failed tasks are returned; no time filter, no max retry limit
-            return all_failed_tasks[chat_key]
+        if not isinstance(all_tasks, list):
+            return []
 
-        return []
+        return [t for t in all_tasks if str(t.get('chat_id')) == str(chat_id)]
     except Exception as e:
         logger.error(f"加载失败任务时出错: {e}")
         return []
 
 
 async def remove_failed_task(chat_id: Union[int, str], message_id: int):
-    """Remove a successfully completed task from the failed list."""
+    """Remove a successfully completed task from the failed list (flat array)."""
     try:
         failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
         if not os.path.exists(failed_tasks_file):
             return False
 
         with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-            all_failed_tasks = json.load(f)
+            tasks = json.load(f)
 
-        chat_key = str(chat_id)
-        if chat_key not in all_failed_tasks:
+        if not isinstance(tasks, list):
             return False
 
-        # Find and remove the task
-        original_count = len(all_failed_tasks[chat_key])
-        all_failed_tasks[chat_key] = [
-            task for task in all_failed_tasks[chat_key]
-            if task['message_id'] != message_id
-        ]
-        removed = original_count != len(all_failed_tasks[chat_key])
+        original_count = len(tasks)
+        tasks = [t for t in tasks if not (
+            str(t.get('chat_id')) == str(chat_id) and t.get('message_id') == message_id
+        )]
+        removed = original_count != len(tasks)
 
         if removed:
-            # Persist updated list
             with open(failed_tasks_file, 'w', encoding='utf-8') as f:
-                json.dump(all_failed_tasks, f, ensure_ascii=False, indent=2)
+                json.dump(tasks, f, ensure_ascii=False, indent=2)
             logger.info(f"从失败列表移除成功任务: chat_id={chat_id}, message_id={message_id}")
 
         return removed
