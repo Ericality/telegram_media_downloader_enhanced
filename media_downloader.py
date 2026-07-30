@@ -238,8 +238,9 @@ class NotificationManager:
         return False
 
     async def send_disk_space_notification(self, has_space: bool, available_gb: float,
-                                           total_gb: float, threshold_gb: float):
-        """Send disk space notification."""
+                                           total_gb: float, threshold_gb: float,
+                                           cloud_extra: str = ""):
+        """Send disk space notification, optionally with cloud storage info."""
         if has_space:
             title = "磁盘空间充足"
             message = f"✅ 磁盘空间充足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
@@ -247,6 +248,8 @@ class NotificationManager:
         else:
             title = "磁盘空间不足"
             message = f"⚠️ 磁盘空间不足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
+            if cloud_extra:
+                message += cloud_extra
             level = "warning"
 
         return await self.send_event_notification("disk_space", title, message, level)
@@ -855,8 +858,15 @@ async def disk_space_monitor_task():
             if not has_space:
                 disk_monitor.space_low = True
                 if (current_time - disk_monitor.last_notification_time) > notification_cooldown:
+                    # Query cloud storage space for diagnostics
+                    cloud_msg = ""
+                    if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
+                        from module.cloud_drive import get_cloud_storage_used
+                        cloud_about = await get_cloud_storage_used(app.cloud_drive_config)
+                        if cloud_about:
+                            cloud_msg = f"\n云端存储: {cloud_about.replace(chr(10), ' | ')}"
                     await notification_manager.send_disk_space_notification(
-                        has_space, available_gb, total_gb, threshold_gb
+                        has_space, available_gb, total_gb, threshold_gb, cloud_msg
                     )
                     disk_monitor.last_notification_time = current_time
             else:
@@ -1260,24 +1270,27 @@ async def record_failed_task(chat_id: Union[int, str], message_id: int, error_ms
 
         task_entry = {
             'message_id': message_id,
-            'error': error_msg[:500],  # Preserve up to 500 chars of error message
+            'chat_id': str(chat_id),
+            'error': error_msg[:500],
             'timestamp': datetime.now().isoformat(),
             'retry_count': 0
         }
 
         if existing_index >= 0:
-            # Update existing entry, increment retry count
             existing_task = failed_tasks[chat_key][existing_index]
             existing_task['retry_count'] += 1
             existing_task['timestamp'] = datetime.now().isoformat()
             existing_task['error'] = error_msg[:500]
             retry_count = existing_task['retry_count']
-            logger.warning(f"更新失败任务: chat_id={chat_id}, message_id={message_id}, 重试次数: {retry_count}")
+            logger.warning(
+                f"更新失败任务: chat={chat_id}, message_id={message_id}, 重试次数: {retry_count}"
+            )
         else:
-            # Add new failed task entry
             failed_tasks[chat_key].append(task_entry)
             retry_count = 0
-            logger.warning(f"记录新失败任务: chat_id={chat_id}, message_id={message_id}")
+            logger.warning(
+                f"记录新失败任务: chat={chat_id}, message_id={message_id}"
+            )
 
         # No limit on failed tasks — infinite retry
 
