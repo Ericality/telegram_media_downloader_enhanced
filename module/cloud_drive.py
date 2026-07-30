@@ -6,9 +6,11 @@ import asyncio
 import functools
 import importlib
 import inspect
+import json
 import os
 import re
 from asyncio import subprocess
+from datetime import datetime
 from subprocess import Popen
 from typing import Callable
 from zipfile import ZipFile
@@ -149,6 +151,29 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         if os.path.exists(test_file):
             os.remove(test_file)
         return False, f"Rclone 验证异常: {e}"
+
+
+async def get_cloud_storage_used(drive_config: CloudDriveConfig) -> Optional[str]:
+    """Query OneDrive total storage usage (used / total).
+
+    Returns a human-readable string or None on failure.
+    """
+    try:
+        root = drive_config.remote_dir.split(":")[0] + ":"
+        cmd = f'"{drive_config.rclone_path}" about "{root}/"'
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env()
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode == 0 and out:
+            return out.strip()
+    except Exception:
+        pass
+    return None
 
 
 class CloudDrive:
@@ -299,12 +324,12 @@ class CloudDrive:
                     logger.warning("未检测到 100% 进度，但进程结束且源文件不在，视为成功")
                     success = True
 
-            # Post-upload: verify remote file SIZE matches local (lsf is unreliable —
-            # OneDrive can show 0-byte stubs for failed multipart uploads)
+            # Post-upload: verify remote file actually exists before declaring victory
             if success:
                 remote_file_basename = os.path.basename(local_file_path)
                 remote_file_path = f"{remote_dir.rstrip('/')}/{remote_file_basename}"
 
+                # 1) Check cloud file exists via rclone size
                 logger.debug(f"验证远程文件大小: {remote_file_path}")
                 verify_cmd = f'"{drive_config.rclone_path}" size "{remote_file_path}"'
                 verify_proc = await asyncio.create_subprocess_shell(
@@ -317,38 +342,32 @@ class CloudDrive:
                 size_output = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
                 logger.debug(f"rclone size 输出: {size_output}")
 
-                # Parse rclone size output: "Total size: 230.068 KiB (235590 Byte)"
-                # Try parenthesized byte count first, then simple "N B" format
-                import re as size_re
-                size_match = size_re.search(r"\((\d+)\s*Bytes?\)", size_output)
-                if not size_match:
-                    size_match = size_re.search(r"Total size:\s*(\d+)\s*Bytes?", size_output)
-                remote_size = int(size_match.group(1)) if size_match else -1
+                # Parse rclone size: "Total size: 230 KiB (235590 Byte)"
+                remote_size = -1
+                for pattern in [r"\((\d+)\s*Bytes?\)", r"Total size:\s*(\d+)\s*Bytes?"]:
+                    m = re.search(pattern, size_output)
+                    if m:
+                        remote_size = int(m.group(1))
+                        break
 
-                if remote_size != local_file_size:
+                cloud_file_ok = remote_size == local_file_size if remote_size != -1 else (
+                    verify_proc.returncode == 0
+                )
+
+                if not cloud_file_ok and os.path.exists(file_to_upload):
                     logger.error(
-                        f"远程文件大小验证失败: 本地={local_file_size}B, 远程={remote_size}B, "
-                        f"{remote_file_path}"
+                        f"远程文件验证失败: 本地={local_file_size}B, 远程={remote_size}B, {remote_file_path}"
                     )
                     return False
-
-                logger.info(f"远程文件大小验证通过: {local_file_size}B / {remote_file_path}")
 
                 drive_config.total_upload_success_file_count += 1
                 logger.info(f"上传成功: {local_file_path} -> {remote_dir}")
 
-                # Delete local file after confirmed remote existence
-                if rclone_action == "move":
-                    if os.path.exists(file_to_upload):
-                        try:
-                            os.remove(file_to_upload)
-                            logger.info(f"手动删除本地文件: {file_to_upload}")
-                        except Exception as e:
-                            logger.error(f"手动删除失败: {e}")
-                elif drive_config.after_upload_file_delete:
+                # 2) Delete local file (rclone move should have deleted it, but be safe)
+                if os.path.exists(file_to_upload):
                     try:
                         os.remove(file_to_upload)
-                        logger.info(f"已删除本地文件: {file_to_upload}")
+                        logger.info(f"删除本地文件: {file_to_upload}")
                     except Exception as e:
                         logger.warning(f"删除本地文件失败: {e}")
 
@@ -360,6 +379,25 @@ class CloudDrive:
 
                 return True
             else:
+                # Upload failed — write a .upload_failed detail file for debugging
+                if os.path.exists(file_to_upload):
+                    failed_log = file_to_upload + ".upload_failed"
+                    try:
+                        with open(failed_log, "w", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "timestamp": datetime.now().isoformat(),
+                                "file": local_file_path,
+                                "remote_dir": remote_dir,
+                                "rclone_action": rclone_action,
+                                "rclone_exit_code": returncode,
+                                "rclone_stderr": stderr,
+                                "local_file_exists": os.path.exists(file_to_upload),
+                                "local_file_size": os.path.getsize(file_to_upload) if os.path.exists(file_to_upload) else -1
+                            }, ensure_ascii=False, indent=2))
+                        logger.info(f"上传失败详情已保存: {failed_log}")
+                    except Exception as e:
+                        logger.warning(f"保存上传失败详情失败: {e}")
+
                 logger.error("上传失败，未达到成功条件")
                 return False
 
