@@ -12,7 +12,7 @@ import re
 from asyncio import subprocess
 from datetime import datetime
 from subprocess import Popen
-from typing import Callable
+from typing import Callable, Optional
 from zipfile import ZipFile
 import logging
 from utils import platform
