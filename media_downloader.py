@@ -1515,7 +1515,7 @@ async def add_download_task(
 
         if wait_seconds > 60:
             logger.warning(f"任务添加等待 {int(wait_seconds)} 秒: message_id={message.id}")
-        logger.debug(f"已添加{'重试' if is_retry else ''}下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
+        logger.debug(f"[{'RETRY' if is_retry else 'NEW'}] 已添加下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
         return True
 
     except asyncio.CancelledError:
@@ -1756,7 +1756,7 @@ async def download_media(
                 current_count = _media_download_count.get(media_uid, 0)
                 if threshold > 0 and current_count >= threshold:
                     logger.info(
-                        f"消息 {message.id}: 媒体已下载 {current_count} 次（阈值={threshold}），跳过下载"
+                        f"[DEDUP] 消息 {message.id}: 媒体已下载 {current_count} 次（阈值={threshold}），跳过下载"
                     )
                     if current_count > 0:
                         _media_download_count[media_uid] = current_count + 1
