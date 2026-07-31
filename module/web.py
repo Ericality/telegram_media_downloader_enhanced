@@ -172,6 +172,56 @@ def web_set_download_state():
     return state
 
 
+@_flask_app.route("/get_storage_status")
+@login_required
+def get_storage_status():
+    """Return local disk and cloud storage usage as percentages only."""
+    import psutil
+    from loguru import logger
+
+    result = {
+        "local_used_pct": 0,
+        "cloud_used_pct": 0,
+        "cloud_ok": False
+    }
+
+    # Local disk
+    try:
+        from __main__ import app as main_app
+        download_path = getattr(main_app, 'download_path', None) or "/app/downloads"
+        if not os.path.exists(download_path):
+            download_path = "/"
+        usage = psutil.disk_usage(download_path)
+        result["local_used_pct"] = round(usage.percent, 1)
+    except Exception as e:
+        logger.warning(f"获取本地磁盘使用率失败: {e}")
+
+    # Cloud storage
+    try:
+        from __main__ import app as main_app
+        from module.cloud_drive import CloudDriveConfig
+        cfg = main_app.cloud_drive_config
+        if cfg and cfg.enable_upload_file and cfg.upload_adapter == "rclone":
+            import subprocess, re
+            root = cfg.remote_dir.split(":")[0] + ":"
+            proc = subprocess.run(
+                [cfg.rclone_path, "about", f"{root}/", "--json"],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, "HOME": "/app", "RCLONE_CONFIG": "/etc/rclone/rclone.conf"}
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                data = json.loads(proc.stdout)
+                total = int(data.get("total", 0))
+                used = int(data.get("used", 0))
+                if total > 0:
+                    result["cloud_used_pct"] = round(used / total * 100, 1)
+                    result["cloud_ok"] = True
+    except Exception as e:
+        logger.warning(f"获取云端存储使用率失败: {e}")
+
+    return jsonify(result)
+
+
 @_flask_app.route("/get_app_version")
 def get_app_version():
     """Get telegram_media_downloader version"""
