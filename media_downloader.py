@@ -1940,9 +1940,21 @@ def _check_config() -> bool:
             diagnose=False
         )
 
+        # Archive previous log file on startup
+        log_path = os.path.join(app.log_file_path, "tdl.log")
+        if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+            archived = os.path.join(
+                app.log_file_path,
+                f"tdl.{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            )
+            try:
+                os.rename(log_path, archived)
+            except OSError:
+                pass  # if rename fails (e.g. file locked), just append
+
         # Add file handler
         logger.add(
-            os.path.join(app.log_file_path, "tdl.log"),
+            log_path,
             rotation="10 MB",
             retention="10 days",
             level=log_level,
