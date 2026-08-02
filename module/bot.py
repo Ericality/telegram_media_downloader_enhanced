@@ -1296,5 +1296,15 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     if hasattr(_bot.app, 'upload_drive') and _bot.app.upload_drive.get('enable_upload_file'):
         msg_lines.append(f"  ☁️  Cloud upload: Enabled")
 
+    # Storage summary
+    try:
+        from __main__ import get_storage_summary_text
+        storage = await get_storage_summary_text()
+        if storage:
+            msg_lines.append("")
+            msg_lines.append(f"💾 {storage}")
+    except Exception:
+        pass
+
     result = "\n".join(msg_lines)
     await client.send_message(message.chat.id, result)
