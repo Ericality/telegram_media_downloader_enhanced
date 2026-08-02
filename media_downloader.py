@@ -275,6 +275,7 @@ class NotificationManager:
     async def send_stats_notification(self, stats: dict):
         """Send statistics notification."""
         title = "下载统计"
+        storage_line = stats.get('storage_summary', '') or await get_storage_summary_text()
         message = (
             f"📊 统计摘要\n"
             f"运行时间: {stats.get('uptime', 'N/A')}\n"
@@ -287,6 +288,8 @@ class NotificationManager:
             f"队列任务: {stats.get('queued_tasks', 0)}\n"
             f"空间不足: {'是' if stats.get('space_low', False) else '否'}"
         )
+        if storage_line:
+            message += f"\n💾 {storage_line}"
 
         return await self.send_event_notification("stats_summary", title, message, "info")
 
@@ -311,6 +314,27 @@ class NotificationManager:
             "bark": bark_success,
             "synology_chat": synology_success
         }
+
+
+async def get_storage_summary_text() -> str:
+    """Build a one-line local + cloud storage summary (module-level, reusable)."""
+    parts = []
+    try:
+        has_space, avail_gb, total_gb = await check_disk_space()
+        pct = round((1 - avail_gb / total_gb) * 100, 1) if total_gb > 0 else 0
+        parts.append(f"本地磁盘: {pct}% ({avail_gb:.1f}G/{total_gb:.1f}G)")
+    except:
+        pass
+    try:
+        if (app.cloud_drive_config.enable_upload_file and
+            app.cloud_drive_config.upload_adapter == "rclone"):
+            from module.cloud_drive import get_cloud_storage_used
+            cloud_info = await get_cloud_storage_used(app.cloud_drive_config)
+            if cloud_info:
+                parts.append(f"云端: {cloud_info.replace(chr(10), ' ')}")
+    except:
+        pass
+    return " · ".join(parts) if parts else ""
 
 
 # Global notification manager instance
