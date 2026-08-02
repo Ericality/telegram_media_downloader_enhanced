@@ -1296,6 +1296,15 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     if hasattr(_bot.app, 'upload_drive') and _bot.app.upload_drive.get('enable_upload_file'):
         msg_lines.append(f"  ☁️  Cloud upload: Enabled")
 
+    retry_ok = 0
+    try:
+        from __main__ import disk_monitor
+        retry_ok = disk_monitor.retry_success_count
+    except:
+        pass
+    if retry_ok > 0:
+        msg_lines.append(f"  🔄 Retry success: {retry_ok}")
+
     # Storage summary
     try:
         from __main__ import get_storage_summary_text

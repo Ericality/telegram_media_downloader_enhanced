@@ -276,11 +276,13 @@ class NotificationManager:
         """Send statistics notification."""
         title = "下载统计"
         storage_line = stats.get('storage_summary', '') or await get_storage_summary_text()
+        retried = disk_monitor.retry_success_count
+        retry_info = f"\n重试成功: {retried}" if retried > 0 else ""
         message = (
             f"📊 统计摘要\n"
             f"运行时间: {stats.get('uptime', 'N/A')}\n"
             f"完成任务: {stats.get('tasks_completed', 0)}\n"
-            f"失败任务(待重试): {stats.get('failed_tasks_pending', 0)}\n"
+            f"失败任务(待重试): {stats.get('failed_tasks_pending', 0)}{retry_info}\n"
             f"下载大小: {stats.get('download_size_mb', 0):.2f}MB\n"
             f"磁盘可用: {stats.get('disk_available_gb', 0):.2f}GB/{stats.get('disk_total_gb', 0):.2f}GB\n"
             f"下载目录大小: {stats.get('download_dir_size_gb', 0):.2f}GB\n"
@@ -352,6 +354,7 @@ class DiskSpaceMonitor:
         self.last_notification_time = 0
         self.paused_workers = set()
         self.stats_start_time = datetime.now()
+        self.retry_success_count = 0
         self.stats_since_last_notification = {
             "tasks_completed": 0,
             "tasks_failed": 0,
@@ -1680,7 +1683,10 @@ async def download_task(client, message, node):
         )
 
         if original_download_status == DownloadStatus.SuccessDownload:
-            await remove_failed_task(node.chat_id, message.id)
+            removed = await remove_failed_task(node.chat_id, message.id)
+            if removed:
+                disk_monitor.retry_success_count += 1
+                logger.info(f"[RETRY] 重试成功: chat_id={node.chat_id}, message_id={message.id}")
 
         if file_name and os.path.exists(file_name):
             try:
