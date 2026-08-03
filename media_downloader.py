@@ -1702,10 +1702,30 @@ async def download_task(client, message, node):
         except Exception as e:
             logger.error(f"清除下载记录失败: {e}")
 
+        # Upload the main media file FIRST (mp4 / jpg / etc.)
+        media_file_to_upload = original_download_status == DownloadStatus.SuccessDownload and file_name or None
+        if media_file_to_upload and not node.upload_telegram_chat_id:
+            logger.info(f"开始上传文件: {media_file_to_upload}")
+            ui_file_name = media_file_to_upload
+            if app.hide_file_name:
+                ui_file_name = f"****{os.path.splitext(media_file_to_upload)[-1]}"
+            upload_ok = await app.upload_file(
+                media_file_to_upload, update_cloud_upload_stat, (node, message.id, ui_file_name)
+            )
+            logger.debug(f"[UPLOAD] download_task 媒体上传结果: ok={upload_ok}, file={media_file_to_upload}")
+            if upload_ok:
+                node.upload_success_count += 1
+
+        # Save and upload .txt caption separately (do NOT replace file_name)
+        download_status = original_download_status
         if app.enable_download_txt and (message.text or message.caption):
-            download_status, file_name = await save_msg_to_file(app, node.chat_id, message)
-        else:
-            download_status, file_name = original_download_status, file_name
+            txt_status, txt_path = await save_msg_to_file(app, node.chat_id, message)
+            if txt_status == DownloadStatus.SuccessDownload and txt_path and not node.upload_telegram_chat_id:
+                logger.info(f"开始上传文件: {txt_path}")
+                upload_txt_ok = await app.upload_file(
+                    txt_path, update_cloud_upload_stat, (node, message.id, txt_path)
+                )
+                logger.debug(f"[UPLOAD] download_task txt 上传结果: ok={upload_txt_ok}, file={txt_path}")
 
         if not node.bot:
             app.set_download_id(node, message.id, download_status)
@@ -1722,19 +1742,6 @@ async def download_task(client, message, node):
             download_status,
             file_name,
         )
-        logger.debug(
-            f"检查上传条件: node.upload_telegram_chat_id={node.upload_telegram_chat_id}, download_status={download_status}")
-        if not node.upload_telegram_chat_id and download_status is DownloadStatus.SuccessDownload:
-            logger.info(f"开始上传文件: {file_name}")
-            ui_file_name = file_name
-            if app.hide_file_name:
-                ui_file_name = f"****{os.path.splitext(file_name)[-1]}"
-            if await app.upload_file(
-                file_name, update_cloud_upload_stat, (node, message.id, ui_file_name)
-            ):
-                node.upload_success_count += 1
-        else:
-            logger.debug(f"跳过上传，条件不满足, chat_id:{node.upload_telegram_chat_id}, download_status={download_status}")
 
         await report_bot_download_status(
             node.bot,

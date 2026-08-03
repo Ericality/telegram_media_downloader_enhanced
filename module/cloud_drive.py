@@ -491,6 +491,8 @@ class CloudDrive:
         bool
             True or False
         """
+        logger.info(f"[UPLOAD] upload_file 被调用: enable={drive_config.enable_upload_file}, "
+                    f"adapter={drive_config.upload_adapter}, file={local_file_path}")
         if not drive_config.enable_upload_file:
             return False
 
@@ -502,4 +504,5 @@ class CloudDrive:
         elif drive_config.upload_adapter == "aligo":
             ret = CloudDrive.aligo_upload_file(drive_config, save_path, local_file_path)
 
+        logger.info(f"[UPLOAD] upload_file 返回: ret={ret}, file={local_file_path}")
         return ret
