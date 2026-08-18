@@ -1298,7 +1298,7 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
 
     retry_ok = 0
     try:
-        from __main__ import disk_monitor
+        from workers.monitor import disk_monitor
         retry_ok = disk_monitor.retry_success_count
     except:
         pass
@@ -1307,7 +1307,7 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
 
     # Storage summary
     try:
-        from __main__ import get_storage_summary_text
+        from services.stats import get_storage_summary_text
         storage = await get_storage_summary_text()
         if storage:
             msg_lines.append("")

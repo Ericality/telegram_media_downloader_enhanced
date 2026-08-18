@@ -187,7 +187,7 @@ def get_storage_status():
 
     # Local disk
     try:
-        from __main__ import app as main_app
+        from core.context import app as main_app
         download_path = getattr(main_app, 'download_path', None) or "/app/downloads"
         if not os.path.exists(download_path):
             download_path = "/"
@@ -198,7 +198,7 @@ def get_storage_status():
 
     # Cloud storage
     try:
-        from __main__ import app as main_app
+        from core.context import app as main_app
         from module.cloud_drive import CloudDriveConfig
         cfg = main_app.cloud_drive_config
         if cfg and cfg.enable_upload_file and cfg.upload_adapter == "rclone":
@@ -247,7 +247,7 @@ def get_download_list():
     failed_task_ids = set()
     try:
         # Try to get path from global app instance
-        from __main__ import app
+        from core.context import app
         failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
         if os.path.exists(failed_tasks_file):
             with open(failed_tasks_file, 'r', encoding='utf-8') as f:
