@@ -1,0 +1,105 @@
+"""Tests for workers.download — download_worker and retry_producer."""
+import asyncio
+from unittest import mock
+
+import core.context as ctx
+import media_downloader as md
+from core.models import TaskNode
+from workers.download import download_worker, retry_producer
+
+from .test_common import MockMessage
+
+
+async def _fake_download_task(client, message, node):
+    md.app.is_running = False  # 处理完成后触发 worker 退出
+
+
+def test_download_worker_exits_on_stop():
+    md.app.is_running = False
+    md.app.force_exit = False
+    asyncio.run(download_worker(mock.MagicMock(), 1))
+    md.app.is_running = True
+
+
+def test_download_worker_processes_task():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.bark_notification = {}
+    ctx.cloud_upload_ok = True
+    ctx.download_semaphore = asyncio.Semaphore(1)
+    ctx.download_queue = asyncio.Queue()
+
+    node = TaskNode(chat_id=-123)
+    message = MockMessage(id=5, media=True, chat_id=-123)
+    ctx.download_queue.put_nowait((message, node))
+
+    client = mock.MagicMock()
+    with mock.patch(
+        "workers.download.check_disk_space", new=mock.AsyncMock(return_value=(True, 20.0, 100.0))
+    ), mock.patch("workers.download.disk_monitor") as dm, \
+            mock.patch("services.downloader.download_task", new=_fake_download_task):
+        dm.paused_workers = set()
+        asyncio.run(download_worker(client, 1))
+
+    assert ctx.download_queue.empty() is True  # 任务已被消费
+    md.app.is_running = True
+
+
+def test_download_worker_pauses_when_cloud_down():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.bark_notification = {}
+    ctx.cloud_upload_ok = False
+    ctx.download_semaphore = asyncio.Semaphore(1)
+    ctx.download_queue = asyncio.Queue()
+
+    async def stop_after_sleep(*args, **kwargs):
+        md.app.is_running = False  # 暂停 sleep 后触发退出
+
+    with mock.patch("workers.download.disk_monitor") as dm, \
+            mock.patch("workers.download.asyncio.sleep", new=stop_after_sleep):
+        dm.paused_workers = set()
+        asyncio.run(download_worker(mock.MagicMock(), 1))
+
+    assert 1 in dm.paused_workers  # 云上传失败 → worker 被暂停
+    md.app.is_running = True
+    ctx.cloud_upload_ok = True
+
+
+def test_retry_producer_exits_when_stopped():
+    md.app.is_running = False
+    md.app.force_exit = False
+    asyncio.run(retry_producer(mock.MagicMock()))
+    md.app.is_running = True
+
+
+def test_retry_producer_retries_failed_task():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.queue_manager.download_queue_size = 10
+    md.app.chat_download_config = {123: mock.MagicMock(node=mock.MagicMock())}
+    ctx.download_queue = mock.MagicMock()
+    ctx.download_queue.qsize.return_value = 0
+
+    client = mock.MagicMock()
+    client.get_messages = mock.AsyncMock(
+        return_value=MockMessage(id=7, media=True, chat_id=123)
+    )
+
+    async def fake_add(msg_, node_, is_retry=False):
+        md.app.is_running = False  # 重试后触发退出
+        return True
+
+    with mock.patch(
+        "workers.download.load_failed_tasks",
+        new=mock.AsyncMock(return_value=[{"message_id": 7}]),
+    ), mock.patch("workers.download.add_download_task", new=fake_add), \
+            mock.patch(
+                "workers.download.remove_failed_task",
+                new=mock.AsyncMock(return_value=True),
+            ) as mock_rm, \
+            mock.patch("workers.download.asyncio.sleep", new=mock.AsyncMock()):
+        asyncio.run(retry_producer(client))
+
+    mock_rm.assert_awaited_once_with(123, 7)
+    md.app.is_running = True
