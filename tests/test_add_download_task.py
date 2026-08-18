@@ -22,7 +22,7 @@ def test_add_download_task_empty_message():
     _reset()
     message = MockMessage(id=5, media=True, empty=True, chat_id=-123)
     node = TaskNode(chat_id=-123)
-    with mock.patch("media_downloader.remove_failed_task", new=mock.AsyncMock()):
+    with mock.patch("workers.download.remove_failed_task", new=mock.AsyncMock()):
         ok = asyncio.run(md.add_download_task(message, node))
     assert ok is False
 
@@ -41,7 +41,7 @@ def test_add_download_task_success():
     message = MockMessage(id=5, media=True, chat_id=-123, chat_title="t")
     node = TaskNode(chat_id=-123)
     with mock.patch(
-        "media_downloader.remove_failed_task", new=mock.AsyncMock(return_value=False)
+        "workers.download.remove_failed_task", new=mock.AsyncMock(return_value=False)
     ):
         ok = asyncio.run(md.add_download_task(message, node))
 
