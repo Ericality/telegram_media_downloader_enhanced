@@ -1,10 +1,1722 @@
-[
-  {
-    "chat_id": "-123",
-    "chat_title": "-123",
-    "message_id": 5,
-    "error": "添加异常: 'NoneType' object has no attribute 'put'",
-    "timestamp": "2026-08-18T23:25:41.877412",
-    "retry_count": 1
-  }
-]
+{
+  "-1001828330390": [
+    {
+      "message_id": 41956,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.168345",
+      "retry_count": 0
+    },
+    {
+      "message_id": 41957,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.169185",
+      "retry_count": 0
+    },
+    {
+      "message_id": 41972,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.169994",
+      "retry_count": 0
+    },
+    {
+      "message_id": 41973,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.177957",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42041,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.163741",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42042,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.166235",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42044,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.168188",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42046,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.170263",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42048,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.173071",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42050,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.175038",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42052,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.176741",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42054,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.178526",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42056,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.180263",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42058,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.182091",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42100,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.183772",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42101,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.185620",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42102,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.187458",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42104,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.189234",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42106,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.190888",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42108,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.192536",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42118,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.622260",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42119,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.624453",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42120,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.642979",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42121,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.645457",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42122,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.102241",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42123,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.124104",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42124,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.126204",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42125,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.556271",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42126,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.558787",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42127,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.561512",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42128,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.564127",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42129,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.592364",
+      "retry_count": 1
+    },
+    {
+      "message_id": 42220,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:10:53.024568",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42221,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:13:43.089679",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42222,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:16:33.156945",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42223,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:19:23.199566",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42224,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:33:51.220098",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42225,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:36:36.564625",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42226,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:36:41.278891",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42227,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:39:26.628566",
+      "retry_count": 0
+    },
+    {
+      "message_id": 42228,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:39:31.323851",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43260,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:21:49.583624",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43261,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:21:56.343278",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43263,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:22:11.705852",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43265,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:22:40.875432",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43266,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:22:49.988133",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43268,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:24:40.081402",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43270,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:24:46.409611",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43272,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:25:01.764920",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43274,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:25:31.039115",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43276,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:25:40.086181",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43278,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:27:30.156557",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43280,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:27:36.532087",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43282,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:27:51.824597",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43284,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:28:21.452637",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43286,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:28:30.150095",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43288,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:30:20.237365",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43290,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:30:26.587727",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43292,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:30:41.904651",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43293,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:31:11.593151",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43295,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:31:20.260998",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43297,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:33:10.302295",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43299,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:33:16.776546",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43301,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:33:31.962678",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43303,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:34:01.805551",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43305,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:34:10.404613",
+      "retry_count": 0
+    },
+    {
+      "message_id": 43307,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-29T22:36:00.382059",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44111,
+      "error": "下载异常: Telegram says: [500 RPC_CALL_FAIL] - Telegram is having internal problems. Please try again later (caused by \"channels.GetMessages\")",
+      "timestamp": "2026-03-30T06:40:32.154247",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44164,
+      "error": "下载异常: Telegram says: [500 RPC_CALL_FAIL] - Telegram is having internal problems. Please try again later (caused by \"channels.GetMessages\")",
+      "timestamp": "2026-03-30T07:37:25.478240",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44923,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-30T13:43:12.623925",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44924,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-30T13:43:52.898278",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44925,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-30T13:44:30.669218",
+      "retry_count": 0
+    },
+    {
+      "message_id": 44926,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-30T13:46:02.773785",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47152,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:43:45.729245",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47153,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:44:00.372441",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47154,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:44:09.808513",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47155,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:45:40.078570",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47156,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:46:36.213364",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47157,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-31T04:46:50.594724",
+      "retry_count": 0
+    },
+    {
+      "message_id": 47555,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.538701",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47556,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.558566",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47557,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.562518",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47558,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.565912",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47559,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.569204",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47560,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.572562",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47561,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.576144",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47562,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.579741",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47563,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.583337",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47707,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.587010",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47708,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.590631",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47709,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.594111",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47873,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.076454",
+      "retry_count": 1
+    },
+    {
+      "message_id": 47875,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.079674",
+      "retry_count": 1
+    },
+    {
+      "message_id": 48045,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:36:38.388333",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48047,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:42:32.058091",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48048,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:42:40.662792",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48049,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:48:16.803325",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48050,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:49:53.224154",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48060,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:11:36.706764",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48062,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:12:23.416444",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48064,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:13:40.956750",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48066,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:15:13.520167",
+      "retry_count": 0
+    },
+    {
+      "message_id": 48996,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.745861",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49002,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.698954",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49011,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.455414",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49012,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.459439",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49013,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.462795",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49014,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.720487",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49015,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.724761",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49108,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.158598",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49112,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.162562",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49113,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.165918",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49131,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.168531",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49132,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.171341",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49133,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.193918",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49134,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.197796",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49135,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.203322",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49137,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.207081",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49139,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:25:53.212372",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49196,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:55:39.496080",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49197,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:55:39.501955",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49198,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:55:39.514204",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49200,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:55:39.518573",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49202,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T09:55:39.524256",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49239,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.586355",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49240,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.590756",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49241,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.593911",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49242,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.598768",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49245,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.602151",
+      "retry_count": 0
+    },
+    {
+      "message_id": 49246,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.627504",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49247,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.631995",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49248,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.635086",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49249,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.637800",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49250,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T10:56:41.640790",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49252,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-24T08:22:06.385712",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49254,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-24T08:22:06.394278",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49256,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-24T08:22:06.398597",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49258,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-24T08:22:06.403188",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49260,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-24T08:22:06.406916",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49266,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:54:58.598134",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49267,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:54:58.613773",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49268,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:54:58.627346",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49270,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:54:58.631236",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49272,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:54:58.636469",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49274,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:55:58.778835",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49276,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:55:58.783948",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49278,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:55:58.788130",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49280,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:55:58.791878",
+      "retry_count": 1
+    },
+    {
+      "message_id": 49282,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-25T17:55:58.796227",
+      "retry_count": 1
+    }
+  ],
+  "-1001981623647": [
+    {
+      "message_id": 60291,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.176612",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60292,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:51:25.179187",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60293,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.887517",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60295,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.888852",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60296,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.890034",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60297,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.891119",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60298,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.892137",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60299,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.899717",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60300,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.901109",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60301,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.902502",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60302,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T09:58:40.904301",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60303,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.228134",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60304,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.229708",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60305,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.230922",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60306,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.232068",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60307,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.234181",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60308,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.242031",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60309,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.243263",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60310,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.244442",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60311,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-26T10:23:42.245516",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60376,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.194260",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60377,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.196125",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60378,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.197803",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60379,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.199640",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60380,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.201453",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60381,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.203729",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60382,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.205499",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60383,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.207475",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60384,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.210007",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60400,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.211787",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60401,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.213390",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60402,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.215069",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60403,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.216830",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60404,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.219071",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60405,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.220916",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60406,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.222640",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60407,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.224356",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60408,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:15:30.226203",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60417,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.632986",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60423,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.635043",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60430,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.636989",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60431,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:26:51.648117",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60437,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.110981",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60444,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.113069",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60447,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.115333",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60448,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.117547",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60449,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:29:00.128701",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60451,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.571613",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60452,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.588848",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60453,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-03-27T05:39:44.594975",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60550,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:22:13.245158",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60551,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:25:03.288576",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60552,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-03-27T13:27:53.334577",
+      "retry_count": 0
+    },
+    {
+      "message_id": 60584,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.597648",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60585,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.600988",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60586,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.604417",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60587,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.607701",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60588,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.611067",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60589,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.614220",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60603,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.617513",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60705,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.623653",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60706,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.626981",
+      "retry_count": 1
+    },
+    {
+      "message_id": 60707,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.630144",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64434,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.649208",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64435,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.652331",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64436,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.655381",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64437,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T03:16:44.658550",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64448,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.048377",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64449,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.051641",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64450,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.055518",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64451,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.059268",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64452,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.062695",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64453,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-05-16T04:11:06.073116",
+      "retry_count": 1
+    },
+    {
+      "message_id": 64574,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:38:32.953406",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64575,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:39:50.527515",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64576,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:41:23.014551",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64577,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:44:13.097753",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64578,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:45:26.742422",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64579,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:45:30.722051",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64580,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:47:03.157110",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64581,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:48:18.912253",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64582,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T17:48:20.780236",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64588,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:10:43.882322",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64589,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:14:27.454084",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64590,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:15:30.660974",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64591,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T18:16:31.051588",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64752,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T22:22:56.846542",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64753,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T22:26:35.300550",
+      "retry_count": 0
+    },
+    {
+      "message_id": 64754,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-16T22:27:06.302640",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66315,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:50:52.805974",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66316,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:53:57.171197",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66317,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:54:12.732886",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66318,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:56:21.977746",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66319,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:56:47.231339",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66320,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:57:02.856779",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66283,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:59:17.643525",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66321,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:59:28.657731",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66322,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:59:37.301786",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66323,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T17:59:52.957889",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66324,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T18:02:07.726714",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66325,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T18:02:19.050244",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66326,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T18:02:27.532217",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66327,
+      "error": "网络错误: Connection lost",
+      "timestamp": "2026-05-28T18:02:43.131498",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66342,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.061587",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66343,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.065102",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66344,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.067807",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66345,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.069997",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66346,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.072469",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66347,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.092150",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66348,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.110821",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66349,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:16:51.115315",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66350,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.713314",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66351,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.715760",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66356,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.718662",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66357,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.721753",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66358,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.724711",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66359,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.739561",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66360,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:22:37.753106",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66365,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.680024",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66367,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.682220",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66370,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.684692",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66371,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.687072",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66373,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.689965",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66374,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.701312",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66375,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-22T07:27:57.705320",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66377,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.468466",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66382,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.470731",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66388,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.485970",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66389,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.488595",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66390,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:25:17.491522",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66391,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.686694",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66394,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.690600",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66395,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.694424",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66396,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.698337",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66399,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.702784",
+      "retry_count": 0
+    },
+    {
+      "message_id": 66400,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.715412",
+      "retry_count": 1
+    },
+    {
+      "message_id": 66401,
+      "error": "程序退出，任务未完成",
+      "timestamp": "2026-07-23T07:57:13.733025",
+      "retry_count": 1
+    }
+  ]
+}
