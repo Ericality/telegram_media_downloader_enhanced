@@ -1,6 +1,6 @@
 """Tests for QueueManager."""
 import media_downloader as md
-from media_downloader import QueueManager
+from core.queues import QueueManager
 
 
 def test_queue_manager_defaults():

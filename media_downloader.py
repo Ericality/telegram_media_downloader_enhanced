@@ -10,98 +10,43 @@ Downloads media from Telegram chats with:
 - Web admin panel
 """
 import asyncio
-import json
 import logging
 import os
-import shutil
 import signal
 import sys
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Union
-from pathlib import Path
+from datetime import datetime
 
-import aiohttp
-import psutil
 import pyrogram
 from loguru import logger
-from pyrogram.types import Audio, Document, Photo, Video, VideoNote, Voice
-from rich.logging import RichHandler
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.theme import Theme
 
 import core.context as ctx
-from core.config import _check_config, _load_config, check_config_consistency, print_config_summary
-from core.context import CONFIG_NAME, RETRY_TIME_OUT, _media_seen, app, queue_manager
-from core.queues import QueueManager
-from core.storage import (
-    _load_duplicate_count,
-    _load_seen_media,
-    _save_duplicate_count,
-    _save_seen_media,
-    load_failed_tasks,
-    record_failed_task,
-    remove_failed_task,
-)
-from module.app import ChatDownloadConfig, DownloadStatus, TaskNode
-from services.downloader import download_media, download_task, save_msg_to_file
-from services.notifier import (
-    notification_manager,
-    send_bark_notification,
-    send_bark_notification_sync,
-    send_synology_chat_notification,
-    send_synology_chat_notification_sync,
-)
-from services.stats import (
-    calculate_directory_size,
-    collect_stats,
-    collect_stats_async,
-    get_storage_summary_text,
-)
+from core.config import _check_config, check_config_consistency, print_config_summary
+from core.context import CONFIG_NAME, app, queue_manager
+from core.storage import _load_duplicate_count, load_failed_tasks, record_failed_task
+from module.app import DownloadStatus
+from module.bot import start_download_bot, stop_download_bot
+from module.language import _t
+from module.pyrogram_extension import HookClient, set_max_concurrent_transmissions
+from module.web import init_web
+from services.notifier import notification_manager
 from workers.download import (
-    _can_download,
-    _check_download_finish,
-    _check_timeout,
-    _get_media_meta,
-    _is_exist,
-    _move_to_download_path,
     add_download_task,
-    add_download_task_batch,
     download_all_chat,
     download_chat_task,
     download_worker,
-    retry_failed_tasks,
-    retry_producer,
 )
 from workers.monitor import (
-    check_disk_space,
     disk_monitor,
     disk_space_monitor_task,
     queue_monitor_task,
     stats_notification_task,
 )
 from workers.notify import notify_worker
-from module.bot import start_download_bot, stop_download_bot
-from module.download_stat import update_download_status
-from module.download_stat import get_download_result
-from module.get_chat_history_v2 import get_chat_history_v2
-from module.language import _t
-from module.pyrogram_extension import (
-    HookClient,
-    fetch_message,
-    get_extension,
-    record_download_status,
-    report_bot_download_status,
-    set_max_concurrent_transmissions,
-    set_meta_data,
-    update_cloud_upload_stat,
-    upload_telegram_chat,
-)
-from module.web import init_web
-from utils.format import truncate_filename, validate_title
-from module.cloud_drive import verify_rclone_remote
-from utils.log import LogFilter
-from utils.meta_data import MetaData
+
 
 custom_theme = Theme({
     "info": "cyan",

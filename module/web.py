@@ -281,16 +281,15 @@ def get_download_list():
             # Build single task JSON entry
             download_speed = format_byte(info["download_speed"]) + "/s"
             progress = round(down_byte / total_size * 100, 1) if total_size > 0 else 0
-            task_json = (
-                '{ "chat":"' + f"{chat_id}" +
-                '", "id":"' + f"{msg_id}" +
-                '", "filename":"' + os.path.basename(info["file_name"]) +
-                '", "total_size":"' + format_byte(total_size) +
-                '" ,"download_progress":"' + f"{progress}" +
-                '" ,"download_speed":"' + download_speed +
-                '" ,"save_path":"' + info["file_name"].replace("\\", "/") +
-                '"}'
-            )
+            task_json = json.dumps({
+                "chat": f"{chat_id}",
+                "id": f"{msg_id}",
+                "filename": os.path.basename(info["file_name"]),
+                "total_size": format_byte(total_size),
+                "download_progress": f"{progress}",
+                "download_speed": download_speed,
+                "save_path": info["file_name"].replace("\\", "/"),
+            }, ensure_ascii=False)
             result_parts.append(task_json)
 
     result = "[" + ",".join(result_parts) + "]"
