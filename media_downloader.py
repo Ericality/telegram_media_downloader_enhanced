@@ -15,11 +15,10 @@ import logging
 import os
 import shutil
 import signal
-import stat
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple, Union, Dict, Any, Callable
+from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 
 import aiohttp
@@ -31,7 +30,19 @@ from rich.logging import RichHandler
 from rich.console import Console
 from rich.theme import Theme
 
-from module.app import Application, ChatDownloadConfig, DownloadStatus, TaskNode
+from core.config import _check_config, _load_config, check_config_consistency, print_config_summary
+from core.context import CONFIG_NAME, app
+from core.queues import QueueManager
+from core.storage import (
+    _load_duplicate_count,
+    _load_seen_media,
+    _save_duplicate_count,
+    _save_seen_media,
+    load_failed_tasks,
+    record_failed_task,
+    remove_failed_task,
+)
+from module.app import ChatDownloadConfig, DownloadStatus, TaskNode
 from module.bot import start_download_bot, stop_download_bot
 from module.download_stat import update_download_status
 from module.download_stat import get_download_result
@@ -52,7 +63,6 @@ from module.web import init_web
 from utils.format import truncate_filename, validate_title
 from module.cloud_drive import verify_rclone_remote
 from utils.log import LogFilter
-from utils.meta import print_meta
 from utils.meta_data import MetaData
 
 custom_theme = Theme({
@@ -90,40 +100,10 @@ BARK_LEVELS = {
     "passive": "passive"
 }
 
-CONFIG_NAME = "config.yaml"
-DATA_FILE_NAME = "data.yaml"
-APPLICATION_NAME = "media_downloader"
-DEDUP_DB_FILE = "seen_media.json"
-DUPLICATE_COUNT_FILE = "duplicate_count.json"
-app = Application(CONFIG_NAME, DATA_FILE_NAME, APPLICATION_NAME)
 _media_seen: set = set()
 _media_download_count: Dict[str, int] = {}
 # Cloud upload health: False = upload verification failed, download workers pause
 cloud_upload_ok: bool = True
-
-class QueueManager:
-    """Download queue manager.
-
-    Manages download/notification worker limits, queue capacity, and task counters.
-    """
-    def __init__(self):
-        self.max_download_tasks = 0
-        self.max_notify_tasks = 1
-        self.download_queue_size = 0
-        self.task_added = 0
-        self.task_processed = 0
-        self.lock = asyncio.Lock()
-
-    def update_limits(self):
-        """Update queue limits from config."""
-        self.max_download_tasks = getattr(app, 'max_download_task', 5)
-        # Read notify worker count from config
-        bark_config = getattr(app, 'bark_notification', {})
-        self.max_notify_tasks = bark_config.get('notify_worker_count', 1)
-        # Queue size set to worker count
-        self.download_queue_size = self.max_download_tasks
-        logger.info(f"队列管理器初始化: 下载worker={self.max_download_tasks}, "
-                    f"通知worker={self.max_notify_tasks}, 下载队列大小={self.download_queue_size}")
 
 queue_manager = QueueManager()
 
@@ -382,57 +362,6 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
     except Exception as e:
         logger.error(f"检查磁盘空间失败: {e}")
         return False, 0, 0
-
-
-def _load_seen_media() -> set:
-    """Load previously seen media IDs from disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
-    if os.path.exists(db_path):
-        try:
-            with open(db_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    seen = set(data)
-                    logger.info(f"已加载 {len(seen)} 条媒体去重记录")
-                    return seen
-        except Exception as e:
-            logger.warning(f"加载媒体去重记录失败: {e}")
-    return set()
-
-
-def _save_seen_media(seen: set):
-    """Persist seen media IDs to disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
-    try:
-        with open(db_path, 'w', encoding='utf-8') as f:
-            json.dump(list(seen), f, ensure_ascii=False)
-    except Exception as e:
-        logger.warning(f"保存媒体去重记录失败: {e}")
-
-
-def _load_duplicate_count() -> Dict[str, int]:
-    """Load duplicate download counts from disk."""
-    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
-    if os.path.exists(db_path):
-        try:
-            with open(db_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    logger.info(f"已加载 {len(data)} 条重复下载计数记录")
-                    return data
-        except Exception as e:
-            logger.warning(f"加载重复下载计数记录失败: {e}")
-    return {}
-
-
-def _save_duplicate_count(counts: Dict[str, int]):
-    """Persist duplicate download counts to disk."""
-    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
-    try:
-        with open(db_path, 'w', encoding='utf-8') as f:
-            json.dump(counts, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"保存重复下载计数记录失败: {e}")
 
 
 async def send_bark_notification_sync(
@@ -1271,116 +1200,6 @@ async def run_until_all_task_finish():
     logger.info("主运行循环结束")
 
 
-async def record_failed_task(chat_id: Union[int, str], message_id: int, error_msg: str):
-    """Record a failed task for retry (no retry limit)."""
-    try:
-        failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
-        tasks = []
-
-        if os.path.exists(failed_tasks_file):
-            try:
-                with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-                    loaded = json.load(f)
-                    tasks = loaded if isinstance(loaded, list) else []
-                    if not isinstance(loaded, list):
-                        logger.info("检测到旧版 failed_tasks.json 格式，将自动迁移")
-            except:
-                tasks = []
-
-        # Look up chat title
-        chat_title = str(chat_id)
-        try:
-            cfg = app.chat_download_config.get(chat_id) or app.chat_download_config.get(str(chat_id))
-            if cfg and cfg.node:
-                maybe = getattr(cfg.node, 'chat_title', None)
-                if maybe:
-                    chat_title = str(maybe)
-        except:
-            pass
-
-        existing_index = -1
-        for i, t in enumerate(tasks):
-            if str(t.get('chat_id')) == str(chat_id) and t.get('message_id') == message_id:
-                existing_index = i
-                break
-
-        if existing_index >= 0:
-            tasks[existing_index]['retry_count'] += 1
-            tasks[existing_index]['timestamp'] = datetime.now().isoformat()
-            tasks[existing_index]['error'] = error_msg[:500]
-            tasks[existing_index]['chat_title'] = chat_title
-            retry_count = tasks[existing_index]['retry_count']
-            logger.warning(f"更新失败任务: chat={chat_title}({chat_id}), message_id={message_id}, 重试次数: {retry_count}")
-        else:
-            tasks.append({
-                'chat_id': str(chat_id),
-                'chat_title': chat_title,
-                'message_id': message_id,
-                'error': error_msg[:500],
-                'timestamp': datetime.now().isoformat(),
-                'retry_count': 0
-            })
-            retry_count = 0
-            logger.warning(f"记录新失败任务: chat={chat_title}({chat_id}), message_id={message_id}")
-
-        with open(failed_tasks_file, 'w', encoding='utf-8') as f:
-            json.dump(tasks, f, ensure_ascii=False, indent=2)
-
-        return retry_count
-    except Exception as e:
-        logger.error(f"记录失败任务时出错: {e}")
-        return 0
-
-
-async def load_failed_tasks(chat_id: Union[int, str]) -> list:
-    """Load failed tasks for a given chat (flat-array format)."""
-    try:
-        failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
-        if not os.path.exists(failed_tasks_file):
-            return []
-
-        with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-            all_tasks = json.load(f)
-
-        if not isinstance(all_tasks, list):
-            return []
-
-        return [t for t in all_tasks if str(t.get('chat_id')) == str(chat_id)]
-    except Exception as e:
-        logger.error(f"加载失败任务时出错: {e}")
-        return []
-
-
-async def remove_failed_task(chat_id: Union[int, str], message_id: int):
-    """Remove a successfully completed task from the failed list (flat array)."""
-    try:
-        failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
-        if not os.path.exists(failed_tasks_file):
-            return False
-
-        with open(failed_tasks_file, 'r', encoding='utf-8') as f:
-            tasks = json.load(f)
-
-        if not isinstance(tasks, list):
-            return False
-
-        original_count = len(tasks)
-        tasks = [t for t in tasks if not (
-            str(t.get('chat_id')) == str(chat_id) and t.get('message_id') == message_id
-        )]
-        removed = original_count != len(tasks)
-
-        if removed:
-            with open(failed_tasks_file, 'w', encoding='utf-8') as f:
-                json.dump(tasks, f, ensure_ascii=False, indent=2)
-            logger.info(f"从失败列表移除成功任务: chat_id={chat_id}, message_id={message_id}")
-
-        return removed
-    except Exception as e:
-        logger.error(f"移除失败任务时出错: {e}")
-        return False
-
-
 def _check_download_finish(media_size: int, download_path: str, ui_file_name: str):
     """Verify download completeness by comparing file sizes."""
     download_size = os.path.getsize(download_path)
@@ -1948,77 +1767,6 @@ async def download_media(
     return DownloadStatus.FailedDownload, None
 
 
-def _load_config():
-    """Load application config."""
-    app.load_config()
-
-
-def _check_config() -> bool:
-    """Check and apply config."""
-    print_meta(logger)
-    try:
-        _load_config()
-
-        # Remove loguru default handler
-        logger.remove()
-
-        # Set log level from config
-        log_level = app.log_level.upper() if hasattr(app, 'log_level') else "INFO"
-
-        logger.debug(f"设置日志级别为: {log_level}")
-
-        # Add console handler
-        logger.add(
-            sys.stderr,
-            level=log_level,
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-            colorize=True,
-            backtrace=False,
-            diagnose=False
-        )
-
-        # Archive previous log file on startup
-        log_path = os.path.join(app.log_file_path, "tdl.log")
-        if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
-            archived = os.path.join(
-                app.log_file_path,
-                f"tdl.{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-            )
-            try:
-                os.rename(log_path, archived)
-            except OSError:
-                pass  # if rename fails (e.g. file locked), just append
-
-        # Add file handler
-        logger.add(
-            log_path,
-            rotation="10 MB",
-            retention="10 days",
-            level=log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-            backtrace=False,
-            diagnose=False
-        )
-
-        # Set stdlib logging level
-        if log_level == "DEBUG":
-            os.environ["DEBUG"] = "1"
-            logging.getLogger().setLevel(logging.DEBUG)
-        else:
-            if "DEBUG" in os.environ:
-                os.environ.pop("DEBUG")
-            logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
-
-        # Verify log level immediately
-        logger.debug(f"DEBUG日志测试 - 如果看到这一行，说明日志级别是DEBUG")
-        logger.info(f"INFO日志测试 - 程序启动，日志级别设置为: {log_level}")
-
-        return True
-    except Exception as e:
-        logger.exception(f"load config error: {e}")
-        return False
-
-
 async def download_worker(client: pyrogram.client.Client, worker_id: int):
     """Download task worker."""
     logger.debug(f"下载Worker {worker_id} 启动")
@@ -2376,192 +2124,6 @@ async def wait_for_queues_to_empty():
 
     logger.warning("队列已强制清空")
     return False
-
-
-def print_config_summary(app):
-    """Print config summary for debugging."""
-    logger.info("=" * 60)
-    logger.info("配置摘要 (用于调试)")
-    logger.info("=" * 60)
-
-    # Basic info
-    logger.info("基本信息:")
-    logger.info(f"  配置文件名: {app.config_file}")
-    logger.info(f"  数据文件名: {app.app_data_file}")
-    logger.info(f"  应用名称: {app.application_name}")
-    logger.info(f"  会话文件路径: {app.session_file_path}")
-    logger.info(f"  日志文件路径: {app.log_file_path}")
-    logger.info(f"  日志级别: {app.log_level}")
-    logger.info(f"  启动超时: {app.start_timeout}秒")
-
-    # API config (credentials masked)
-    logger.info("\nAPI配置:")
-    logger.info(f"  API ID: {'已设置' if app.api_id else '未设置'}")
-    logger.info(f"  API Hash: {'已设置' if app.api_hash else '未设置'}")
-    logger.info(f"  Bot Token: {'已设置' if app.bot_token else '未设置'}")
-    logger.info(f"  代理: {app.proxy if app.proxy else '未设置'}")
-
-    # Download config
-    logger.info("\n下载配置:")
-    logger.info(f"  下载路径: {app.save_path}")
-    logger.info(f"  临时路径: {app.temp_save_path}")
-    logger.info(f"  媒体类型: {app.media_types}")
-    logger.info(f"  文件格式: {app.file_formats}")
-    logger.info(f"  最大下载任务数: {app.max_download_task}")
-    logger.info(f"  最大并发传输数: {app.max_concurrent_transmissions}")
-    logger.info(f"  隐藏文件名: {app.hide_file_name}")
-    logger.info(f"  日期格式: {app.date_format}")
-    logger.info(f"  启用文本下载: {app.enable_download_txt}")
-    logger.info(f"  丢弃无音视频: {app.drop_no_audio_video}")
-
-    # Notification config
-    logger.info("\n通知配置:")
-
-    # Check for new-format notifications config
-    if hasattr(app, 'notifications'):
-        notifications = app.notifications
-        logger.info("  [新版配置]")
-
-        # Bark config
-        bark_config = notifications.get('bark', {})
-        logger.info(f"  Bark通知:")
-        logger.info(f"    启用: {bark_config.get('enabled', False)}")
-        if bark_config.get('enabled', False):
-            logger.info(f"    URL: {'已设置' if bark_config.get('url') else '未设置'}")
-            logger.info(f"    默认分组: {bark_config.get('default_group', 'TelegramDownloader')}")
-            logger.info(f"    默认级别: {bark_config.get('default_level', 'active')}")
-            logger.info(f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB")
-            logger.info(f"    空间检查间隔: {bark_config.get('space_check_interval', 300)}秒")
-            logger.info(f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒")
-            logger.info(f"    通知worker数量: {bark_config.get('notify_worker_count', 1)}")
-            logger.info(f"    通知事件列表: {bark_config.get('events_to_notify', [])}")
-
-        # Synology Chat config
-        synology_config = notifications.get('synology_chat', {})
-        logger.info(f"  群晖Chat通知:")
-        logger.info(f"    启用: {synology_config.get('enabled', False)}")
-        if synology_config.get('enabled', False):
-            logger.info(f"    Webhook URL: {'已设置' if synology_config.get('webhook_url') else '未设置'}")
-            logger.info(f"    机器人名称: {synology_config.get('bot_name', 'Telegram下载器')}")
-            logger.info(f"    默认级别: {synology_config.get('default_level', 'info')}")
-            logger.info(f"    通知事件列表: {synology_config.get('events_to_notify', [])}")
-
-        # Global config
-        global_config = notifications.get('global', {})
-        logger.info(f"  全局配置:")
-        logger.info(f"    统计通知间隔: {global_config.get('stats_notification_interval', 3600)}秒")
-        logger.info(f"    队列监控间隔: {global_config.get('queue_monitor_interval', 300)}秒")
-        logger.info(f"    最大重试次数: {global_config.get('max_notification_retries', 3)}")
-
-    # Also check legacy config (backward compat)
-    elif hasattr(app, 'bark_notification'):
-        bark_config = app.bark_notification
-        logger.info("  [旧版配置]")
-        logger.info(f"  Bark通知:")
-        logger.info(f"    启用: {bark_config.get('enabled', False)}")
-        if bark_config.get('enabled', False):
-            logger.info(f"    URL: {'已设置' if bark_config.get('url') else '未设置'}")
-            logger.info(f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB")
-            logger.info(f"    空间检查间隔: {bark_config.get('space_check_interval', 300)}秒")
-            logger.info(f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒")
-            logger.info(f"    通知worker数量: {bark_config.get('notify_worker_count', 1)}")
-            logger.info(f"    通知事件列表: {bark_config.get('events_to_notify', [])}")
-    else:
-        logger.info("  通知配置: 未找到")
-
-    # File naming config
-    logger.info("\n文件命名配置:")
-    logger.info(f"  文件路径前缀: {app.file_path_prefix}")
-    logger.info(f"  文件名前缀: {app.file_name_prefix}")
-    logger.info(f"  文件名前缀分隔符: {app.file_name_prefix_split}")
-
-    # Web config
-    logger.info("\nWeb配置:")
-    logger.info(f"  Web主机: {app.web_host}")
-    logger.info(f"  Web端口: {app.web_port}")
-    logger.info(f"  Web调试模式: {app.debug_web}")
-    logger.info(f"  Web登录密钥: {'已设置' if app.web_login_secret else '未设置'}")
-
-    # Language and permissions
-    logger.info("\n语言和权限:")
-    logger.info(f"  语言: {app.language}")
-    logger.info(f"  允许的用户ID: {len(app.allowed_user_ids) if app.allowed_user_ids else 0}个")
-    if app.allowed_user_ids and len(app.allowed_user_ids) <= 10:
-        logger.info(f"    具体ID: {list(app.allowed_user_ids)}")
-
-    # Chat config
-    logger.info("\n聊天配置:")
-    logger.info(f"  聊天数量: {len(app.chat_download_config)}")
-    for i, (chat_id, config) in enumerate(app.chat_download_config.items(), 1):
-        logger.info(f"  聊天 #{i}:")
-        logger.info(f"    ID: {chat_id}")
-        logger.info(f"    最后读取消息ID: {config.last_read_message_id}")
-        logger.info(f"    待重试消息数: {len(config.ids_to_retry)}")
-        logger.info(
-            f"    过滤器: {config.download_filter[:50] + '...' if config.download_filter and len(config.download_filter) > 50 else config.download_filter}")
-        logger.info(f"    上传Telegram聊天ID: {config.upload_telegram_chat_id}")
-
-    # Cloud drive config
-    logger.info("\n云存储配置:")
-    logger.info(f"  启用文件上传: {app.cloud_drive_config.enable_upload_file}")
-    if app.cloud_drive_config.enable_upload_file:
-        logger.info(f"  上传适配器: {app.cloud_drive_config.upload_adapter}")
-        logger.info(f"  Rclone路径: {app.cloud_drive_config.rclone_path}")
-        logger.info(f"  远程目录: {app.cloud_drive_config.remote_dir}")
-        logger.info(f"  上传前压缩: {app.cloud_drive_config.before_upload_file_zip}")
-        logger.info(f"  上传后删除: {app.cloud_drive_config.after_upload_file_delete}")
-
-    # Other config
-    logger.info("\n其他配置:")
-    logger.info(f"  程序重启标志: {app.restart_program}")
-    logger.info(f"  上传Telegram后删除: {app.after_upload_telegram_delete}")
-    logger.info(
-        f"  转发限制: {app.forward_limit_call.max_limit_call_times if hasattr(app, 'forward_limit_call') else '未设置'}")
-
-    logger.info("=" * 60)
-
-
-def check_config_consistency(app):
-    """Check config consistency and report issues."""
-    issues = []
-
-    # Check API config
-    if not app.api_id or not app.api_hash:
-        issues.append("API ID或API Hash未设置")
-
-    # Check download path
-    if not os.path.exists(app.save_path):
-        logger.warning(f"下载路径不存在: {app.save_path}")
-        issues.append(f"下载路径不存在: {app.save_path}")
-
-    # Check media types
-    if not app.media_types:
-        issues.append("媒体类型未设置")
-
-    # Check file formats
-    if not app.file_formats:
-        issues.append("文件格式未设置")
-
-    # Check chat config
-    if not app.chat_download_config:
-        issues.append("聊天配置为空")
-
-    # Check notification config
-    notifications_config = getattr(app, 'notifications', {})
-
-    # Check Bark config
-    bark_config = notifications_config.get('bark', {})
-    if bark_config.get('enabled', False):
-        if not bark_config.get('url'):
-            issues.append("Bark通知已启用但URL未设置")
-
-    # Check Synology Chat config
-    synology_config = notifications_config.get('synology_chat', {})
-    if synology_config.get('enabled', False):
-        if not synology_config.get('webhook_url'):
-            issues.append("群晖Chat通知已启用但Webhook URL未设置")
-
-    return issues
 
 
 def main():

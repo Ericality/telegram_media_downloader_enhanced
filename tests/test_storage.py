@@ -2,6 +2,7 @@
 import asyncio
 
 import media_downloader as md
+from core.storage import DEDUP_DB_FILE, DUPLICATE_COUNT_FILE
 
 
 def test_save_and_load_seen_media(tmp_path):
@@ -17,13 +18,13 @@ def test_load_seen_media_missing_file(tmp_path):
 
 def test_load_seen_media_corrupted_file(tmp_path):
     md.app.session_file_path = str(tmp_path)
-    (tmp_path / md.DEDUP_DB_FILE).write_text("{not valid json")
+    (tmp_path / DEDUP_DB_FILE).write_text("{not valid json")
     assert md._load_seen_media() == set()
 
 
 def test_load_seen_media_non_list_content(tmp_path):
     md.app.session_file_path = str(tmp_path)
-    (tmp_path / md.DEDUP_DB_FILE).write_text('{"not": "a list"}')
+    (tmp_path / DEDUP_DB_FILE).write_text('{"not": "a list"}')
     assert md._load_seen_media() == set()
 
 
@@ -40,7 +41,7 @@ def test_load_duplicate_count_missing_file(tmp_path):
 
 def test_load_duplicate_count_corrupted_file(tmp_path):
     md.app.session_file_path = str(tmp_path)
-    (tmp_path / md.DUPLICATE_COUNT_FILE).write_text("{bad json")
+    (tmp_path / DUPLICATE_COUNT_FILE).write_text("{bad json")
     assert md._load_duplicate_count() == {}
 
 
