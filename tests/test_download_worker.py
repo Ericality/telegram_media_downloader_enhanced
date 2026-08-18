@@ -4,8 +4,8 @@ from unittest import mock
 
 import core.context as ctx
 import media_downloader as md
-from core.models import TaskNode
-from workers.download import download_worker, retry_producer
+from core.models import ChatDownloadConfig, DownloadStatus, TaskNode
+from workers.download import download_chat_task, download_worker, retry_producer
 
 from .test_common import MockMessage
 
@@ -103,3 +103,41 @@ def test_retry_producer_retries_failed_task():
 
     mock_rm.assert_awaited_once_with(123, 7)
     md.app.is_running = True
+
+
+def test_download_chat_task_adds_task():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.chat_download_config = {}
+    chat_cfg = ChatDownloadConfig()
+    node = TaskNode(chat_id=123)
+
+    async def fake_history(*args, **kwargs):
+        yield MockMessage(id=1, media=True, chat_id=123, chat_title="chat", caption="cap")
+
+    with mock.patch("workers.download.get_chat_history_v2", new=fake_history), \
+            mock.patch(
+                "workers.download.add_download_task", new=mock.AsyncMock(return_value=True)
+            ) as mock_add:
+        asyncio.run(download_chat_task(mock.MagicMock(), 123, chat_cfg, node))
+
+    mock_add.assert_awaited_once()
+
+
+def test_download_chat_task_skips_when_filter_fails():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.chat_download_config = {}
+    chat_cfg = ChatDownloadConfig()
+    node = TaskNode(chat_id=123)
+
+    async def fake_history(*args, **kwargs):
+        yield MockMessage(id=1, media=True, chat_id=123, chat_title="chat")
+
+    with mock.patch("workers.download.get_chat_history_v2", new=fake_history), \
+            mock.patch("workers.download.add_download_task", new=mock.AsyncMock()) as mock_add, \
+            mock.patch("workers.download.app.exec_filter", return_value=False):
+        asyncio.run(download_chat_task(mock.MagicMock(), 123, chat_cfg, node))
+
+    mock_add.assert_not_awaited()
+    assert node.download_status[1] == DownloadStatus.SkipDownload
