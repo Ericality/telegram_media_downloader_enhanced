@@ -144,8 +144,8 @@ class NotificationManager:
 
     async def send_stats_notification(self, stats: dict):
         """Send statistics notification."""
-        from media_downloader import disk_monitor
         from services.stats import get_storage_summary_text
+        from workers.monitor import disk_monitor
 
         title = "下载统计"
         storage_line = stats.get('storage_summary', '') or await get_storage_summary_text()
