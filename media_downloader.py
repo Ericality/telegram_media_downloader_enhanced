@@ -57,6 +57,13 @@ from services.stats import (
     collect_stats_async,
     get_storage_summary_text,
 )
+from workers.monitor import (
+    check_disk_space,
+    disk_monitor,
+    disk_space_monitor_task,
+    queue_monitor_task,
+    stats_notification_task,
+)
 from module.bot import start_download_bot, stop_download_bot
 from module.download_stat import update_download_status
 from module.download_stat import get_download_result
@@ -113,46 +120,6 @@ BARK_LEVELS = {
     "timeSensitive": "timeSensitive",
     "passive": "passive"
 }
-
-class DiskSpaceMonitor:
-    """Disk space monitor.
-
-    Tracks disk usage, controls worker pause/resume, maintains stats start time.
-    """
-    def __init__(self):
-        self.space_low = False
-        self.last_check_time = 0
-        self.last_notification_time = 0
-        self.paused_workers = set()
-        self.stats_start_time = datetime.now()
-        self.retry_success_count = 0
-        self.stats_since_last_notification = {
-            "tasks_completed": 0,
-            "tasks_failed": 0,
-            "tasks_skipped": 0,
-            "download_size": 0
-        }
-
-disk_monitor = DiskSpaceMonitor()
-
-
-async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
-    """Check available disk space in GB."""
-    try:
-        download_path = app.download_path if hasattr(app, 'download_path') else "/app/downloads"
-        if not os.path.exists(download_path):
-            download_path = "/"
-
-        disk_usage = psutil.disk_usage(download_path)
-        available_gb = disk_usage.free / (1024 ** 3)
-        total_gb = disk_usage.total / (1024 ** 3)
-        threshold_gb = float(threshold_gb)
-        has_enough_space = available_gb >= threshold_gb
-
-        return has_enough_space, round(available_gb, 2), round(total_gb, 2)
-    except Exception as e:
-        logger.error(f"检查磁盘空间失败: {e}")
-        return False, 0, 0
 
 
 
@@ -258,181 +225,6 @@ async def notify_worker(worker_id: int):
 
     logger.debug(f"通知Worker {worker_id} 退出")
 
-
-async def disk_space_monitor_task():
-    """Disk space monitor task."""
-    # Check if notification system is enabled
-    if not (notification_manager.bark_enabled or notification_manager.synology_chat_enabled):
-        logger.info("通知系统未启用，跳过磁盘空间监控任务")
-        return
-
-    # Get disk space thresholds
-    bark_threshold = notification_manager.bark_config.get('disk_space_threshold_gb', 10.0)
-    synology_threshold = notification_manager.synology_chat_config.get('disk_space_threshold_gb', 10.0)
-    # Use the smaller threshold
-    threshold_gb = min(bark_threshold, synology_threshold)
-
-    # Get check intervals
-    bark_interval = notification_manager.bark_config.get('space_check_interval', 300)
-    synology_interval = notification_manager.synology_chat_config.get('space_check_interval', 300)
-    # Use the smaller interval
-    check_interval = min(bark_interval, synology_interval)
-
-    logger.info(f"磁盘空间监控已启动，阈值: {threshold_gb}GB，检查间隔: {check_interval}秒")
-
-    # Run one check immediately on startup
-    try:
-        has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
-        await notification_manager.send_disk_space_notification(has_space, available_gb, total_gb, threshold_gb)
-    except Exception as e:
-        logger.error(f"启动时磁盘空间检查失败: {e}")
-
-    # Start periodic checks
-    while True:
-        # Check exit signal
-        if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
-            logger.info("磁盘空间监控任务收到退出信号，准备退出")
-            break
-
-        try:
-            await asyncio.sleep(min(check_interval, 5))  # Cap at 5s for fast exit response
-
-            has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
-            current_time = time.time()
-            notification_cooldown = 3600
-
-            if not has_space:
-                disk_monitor.space_low = True
-                if (current_time - disk_monitor.last_notification_time) > notification_cooldown:
-                    # Query cloud storage space for diagnostics
-                    cloud_msg = ""
-                    if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
-                        from module.cloud_drive import get_cloud_storage_used
-                        cloud_about = await get_cloud_storage_used(app.cloud_drive_config)
-                        if cloud_about:
-                            cloud_msg = f"\n云端存储: {cloud_about.replace(chr(10), ' | ')}"
-                    await notification_manager.send_disk_space_notification(
-                        has_space, available_gb, total_gb, threshold_gb, cloud_msg
-                    )
-                    disk_monitor.last_notification_time = current_time
-            else:
-                if disk_monitor.space_low:
-                    disk_monitor.space_low = False
-                    await notification_manager.send_disk_space_notification(
-                        has_space, available_gb, total_gb, threshold_gb
-                    )
-
-                    if disk_monitor.paused_workers:
-                        logger.info("磁盘空间恢复，准备恢复下载任务...")
-                        disk_monitor.paused_workers.clear()
-
-        except Exception as e:
-            logger.error(f"磁盘空间监控任务出错: {e}")
-            await asyncio.sleep(60)
-
-    logger.info("磁盘空间监控任务已停止")
-
-
-async def stats_notification_task():
-    """Periodic stats notification task."""
-    # Check if notification system is enabled
-    if not notification_manager.should_notify("stats_summary"):
-        logger.info("统计摘要通知未启用，跳过统计通知任务")
-        return
-
-    logger.info("统计通知任务已启动")
-
-    # Run one notification immediately on startup
-    try:
-        stats = await collect_stats_async()
-        if stats:
-            await notification_manager.send_stats_notification(stats)
-            logger.success("启动测试统计通知发送成功")
-        else:
-            logger.warning("收集统计信息失败，跳过启动测试通知")
-    except Exception as e:
-        logger.error(f"启动测试统计通知发送失败: {e}")
-
-    # Get notification intervals
-    bark_interval = notification_manager.bark_config.get('stats_notification_interval', 3600)
-    global_interval = notification_manager.global_config.get('stats_notification_interval', 3600)
-    # Use the shorter interval
-    interval = min(bark_interval, global_interval)
-
-    logger.info(f"统计通知任务将每 {interval} 秒执行一次")
-
-    while getattr(app, 'is_running', True):
-        try:
-            await asyncio.sleep(interval)
-
-            stats = await collect_stats_async()
-            if not stats:
-                logger.warning("收集统计信息失败，跳过本次通知")
-                continue
-
-            await notification_manager.send_stats_notification(stats)
-
-            # Reset stats counters
-            disk_monitor.stats_since_last_notification = {
-                "tasks_completed": 0,
-                "tasks_failed": 0,
-                "tasks_skipped": 0,
-                "download_size": 0
-            }
-        except Exception as e:
-            logger.error(f"统计通知任务出错: {e}")
-            await asyncio.sleep(60)
-
-
-async def queue_monitor_task():
-    """Queue monitor task; detects prolonged queue saturation."""
-    # Check if notification system is enabled
-    queue_status_enabled = notification_manager.should_notify("queue_status")
-    queue_full_enabled = notification_manager.should_notify("queue_full")
-
-    if not (queue_status_enabled or queue_full_enabled):
-        logger.info("队列通知未启用，跳过队列监控任务")
-        return
-
-    logger.info("队列监控任务已启动")
-
-    # Get monitor interval
-    global_interval = notification_manager.global_config.get('queue_monitor_interval', 300)
-
-    while getattr(app, 'is_running', True):
-        try:
-            await asyncio.sleep(global_interval)
-
-            current_size = ctx.download_queue.qsize()
-            queue_capacity = queue_manager.download_queue_size
-            usage_percent = current_size / queue_capacity if queue_capacity > 0 else 0
-
-            # Send status report if queue usage exceeds 80%
-            if usage_percent > 0.8 and queue_status_enabled:
-                # Get actual active worker count
-                active_workers = queue_manager.max_download_tasks - len(disk_monitor.paused_workers)
-
-                # Get currently downloading task count from download_result (consistent with Web UI)
-                downloading_count = sum(len(msgs) for msgs in get_download_result().values())
-
-                # Queued task count
-                queued_count = ctx.download_queue.qsize()
-
-                message = (
-                    f"📊 队列状态报告\n"
-                    f"队列使用率: {current_size}/{queue_capacity} ({int(usage_percent * 100)}%)\n"
-                    f"Active workers: {active_workers}\n"
-                    f"Downloading tasks: {downloading_count}\n"
-                    f"Queued tasks: {queued_count}\n"
-                    f"暂停worker数: {len(disk_monitor.paused_workers)}\n"
-                    f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-
-                await notification_manager.send_event_notification("queue_status", "队列状态", message, "info")
-
-        except Exception as e:
-            logger.error(f"队列监控任务出错: {e}")
-            await asyncio.sleep(60)
 
 
 def run_async_sync(coroutine, loop=None, timeout=10):
