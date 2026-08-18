@@ -14,7 +14,7 @@ from core.storage import load_failed_tasks
 
 async def get_storage_summary_text() -> str:
     """Build a one-line local + cloud storage summary (module-level, reusable)."""
-    from media_downloader import check_disk_space
+    from workers.monitor import check_disk_space
 
     parts = []
     try:
@@ -60,7 +60,7 @@ def calculate_directory_size(directory_path: str) -> int:
 
 async def collect_stats_async() -> Dict[str, Any]:
     """Collect statistics asynchronously."""
-    from media_downloader import check_disk_space, disk_monitor
+    from workers.monitor import check_disk_space, disk_monitor
 
     try:
         uptime = datetime.now() - disk_monitor.stats_start_time
