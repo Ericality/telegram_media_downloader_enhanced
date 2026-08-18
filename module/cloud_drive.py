@@ -69,6 +69,7 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
     try:
         # Extract the root of the remote path (e.g., "OneDriveEricalitySha:" from "OneDriveEricalitySha:telegram/downloads")
         root_remote = drive_config.remote_dir.split(":")[0] + ":"
+        test_file = "/tmp/_rclone_verify_test.txt"
 
         # Ensure remote subdirectory exists
         subdir_cmd = f'"{drive_config.rclone_path}" mkdir "{drive_config.remote_dir.rstrip("/")}/"'
@@ -82,7 +83,6 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
         # mkdir may return non-zero if directory already exists — that's OK
 
         # Write test: upload a tiny file
-        test_file = "/tmp/_rclone_verify_test.txt"
         remote_test_path = f"{drive_config.remote_dir.rstrip('/')}/_rclone_verify_test.txt"
 
         with open(test_file, "w") as f:

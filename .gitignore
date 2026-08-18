@@ -70,3 +70,6 @@ config.yaml
 data.yaml
 *.scss
 *.css.map
+
+# 本地私有重构计划与阶段总结（不提交 GitHub）
+refactor/
