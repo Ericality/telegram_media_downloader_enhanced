@@ -5,7 +5,8 @@ from unittest import mock
 
 import core.context as ctx
 import media_downloader as md
-from media_downloader import DownloadStatus, TaskNode, download_media
+from core.models import DownloadStatus, TaskNode
+from services.downloader import download_media
 from module.pyrogram_extension import reset_download_cache
 
 from .test_common import MockMessage, MockVideo

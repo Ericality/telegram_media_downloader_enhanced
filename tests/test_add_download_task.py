@@ -4,7 +4,7 @@ from unittest import mock
 
 import core.context as ctx
 import media_downloader as md
-from media_downloader import DownloadStatus, TaskNode
+from core.models import DownloadStatus, TaskNode
 
 from .test_common import MockMessage
 

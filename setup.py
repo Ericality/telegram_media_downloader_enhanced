@@ -10,7 +10,7 @@ setup(
     description="A simple script to download media from telegram",
     url="https://github.com/tangyoha/telegram_media_downloader",
     download_url="https://github.com/tangyoha/telegram_media_downloader/releases/latest",
-    py_modules=["media_downloader"],
+    py_modules=["media_downloader", "main"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
