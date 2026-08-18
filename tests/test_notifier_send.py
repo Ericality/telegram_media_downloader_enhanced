@@ -2,6 +2,7 @@
 import asyncio
 from unittest import mock
 
+import core.context as ctx
 import media_downloader as md
 
 
@@ -51,14 +52,14 @@ def test_synology_sync_no_webhook_returns_false():
 
 
 def test_bark_enqueue():
-    md.notify_queue = asyncio.Queue()
+    ctx.notify_queue = asyncio.Queue()
     ok = asyncio.run(md.send_bark_notification("title", "body"))
     assert ok is True
-    assert md.notify_queue.qsize() == 1
+    assert ctx.notify_queue.qsize() == 1
 
 
 def test_synology_enqueue():
-    md.notify_queue = asyncio.Queue()
+    ctx.notify_queue = asyncio.Queue()
     ok = asyncio.run(md.send_synology_chat_notification("title", "msg"))
     assert ok is True
-    assert md.notify_queue.qsize() == 1
+    assert ctx.notify_queue.qsize() == 1

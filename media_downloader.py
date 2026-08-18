@@ -30,8 +30,9 @@ from rich.logging import RichHandler
 from rich.console import Console
 from rich.theme import Theme
 
+import core.context as ctx
 from core.config import _check_config, _load_config, check_config_consistency, print_config_summary
-from core.context import CONFIG_NAME, app
+from core.context import CONFIG_NAME, RETRY_TIME_OUT, _media_seen, app, queue_manager
 from core.queues import QueueManager
 from core.storage import (
     _load_duplicate_count,
@@ -99,19 +100,6 @@ BARK_LEVELS = {
     "timeSensitive": "timeSensitive",
     "passive": "passive"
 }
-
-_media_seen: set = set()
-_media_download_count: Dict[str, int] = {}
-# Cloud upload health: False = upload verification failed, download workers pause
-cloud_upload_ok: bool = True
-
-queue_manager = QueueManager()
-
-download_semaphore: asyncio.Semaphore = None
-download_queue: asyncio.Queue = None
-notify_queue: asyncio.Queue = None
-
-RETRY_TIME_OUT = 3
 
 logging.getLogger("pyrogram.session.session").addFilter(LogFilter())
 logging.getLogger("pyrogram.client").addFilter(LogFilter())
@@ -463,7 +451,7 @@ async def send_bark_notification(
         create_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Put notification task into queue
-        await notify_queue.put({
+        await ctx.notify_queue.put({
             'type': 'bark_notification',
             'title': title,
             'body': body,
@@ -644,7 +632,7 @@ async def send_synology_chat_notification(
         create_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Put notification task into queue
-        await notify_queue.put({
+        await ctx.notify_queue.put({
             'type': 'synology_chat_notification',
             'title': title,
             'message': message,
@@ -677,13 +665,13 @@ async def notify_worker(worker_id: int):
 
         try:
             # Exit only if queue is empty
-            if should_exit and notify_queue.empty():
+            if should_exit and ctx.notify_queue.empty():
                 logger.debug(f"通知Worker {worker_id} 队列已空，准备退出")
                 break
 
             # Use timed get to avoid indefinite blocking
             try:
-                task = await asyncio.wait_for(notify_queue.get(), timeout=0.5)
+                task = await asyncio.wait_for(ctx.notify_queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
 
@@ -720,7 +708,7 @@ async def notify_worker(worker_id: int):
                 except Exception as e:
                     logger.error(f"通知Worker {worker_id} 发送Bark通知时出错: {e}, 延迟={delay_seconds:.1f}秒")
                 finally:
-                    notify_queue.task_done()
+                    ctx.notify_queue.task_done()
 
             elif task_type == 'synology_chat_notification':
                 # Process Synology Chat notification
@@ -749,7 +737,7 @@ async def notify_worker(worker_id: int):
                 except Exception as e:
                     logger.error(f"通知Worker {worker_id} 发送群晖Chat通知时出错: {e}, 延迟={delay_seconds:.1f}秒")
                 finally:
-                    notify_queue.task_done()
+                    ctx.notify_queue.task_done()
 
             elif task_type == 'stats_notification':
                 # Placeholder for future notification types
@@ -761,7 +749,7 @@ async def notify_worker(worker_id: int):
         except Exception as e:
             logger.error(f"通知Worker {worker_id} 异常: {e}")
             try:
-                notify_queue.task_done()
+                ctx.notify_queue.task_done()
             except:
                 pass
             await asyncio.sleep(1)
@@ -913,7 +901,7 @@ async def queue_monitor_task():
         try:
             await asyncio.sleep(global_interval)
 
-            current_size = download_queue.qsize()
+            current_size = ctx.download_queue.qsize()
             queue_capacity = queue_manager.download_queue_size
             usage_percent = current_size / queue_capacity if queue_capacity > 0 else 0
 
@@ -926,7 +914,7 @@ async def queue_monitor_task():
                 downloading_count = sum(len(msgs) for msgs in get_download_result().values())
 
                 # Queued task count
-                queued_count = download_queue.qsize()
+                queued_count = ctx.download_queue.qsize()
 
                 message = (
                     f"📊 队列状态报告\n"
@@ -977,7 +965,7 @@ async def collect_stats_async() -> Dict[str, Any]:
 
         # Get queue size (sync-safe)
         try:
-            queued_tasks = download_queue.qsize() if hasattr(download_queue, 'qsize') else 0
+            queued_tasks = ctx.download_queue.qsize() if hasattr(ctx.download_queue, 'qsize') else 0
         except:
             queued_tasks = 0
 
@@ -1148,11 +1136,11 @@ async def graceful_shutdown():
 
     # Record all queued tasks
     try:
-        while not download_queue.empty():
+        while not ctx.download_queue.empty():
             try:
-                message, node = download_queue.get_nowait()
+                message, node = ctx.download_queue.get_nowait()
                 pending_messages.append((message.id, node.chat_id))
-                download_queue.task_done()
+                ctx.download_queue.task_done()
                 logger.debug(f"记录队列中的任务: chat_id={node.chat_id}, message_id={message.id}")
             except (asyncio.QueueEmpty, ValueError):
                 break
@@ -1332,7 +1320,7 @@ async def add_download_task(
     try:
         # Block on queue.put() until a worker takes a task (natural backpressure)
         put_start = time.time()
-        await download_queue.put((message, node))
+        await ctx.download_queue.put((message, node))
         wait_seconds = time.time() - put_start
 
         async with queue_manager.lock:
@@ -1361,7 +1349,7 @@ async def add_download_task(
 
         if wait_seconds > 60:
             logger.warning(f"任务添加等待 {int(wait_seconds)} 秒: message_id={message.id}")
-        logger.debug(f"[{'RETRY' if is_retry else 'NEW'}] 已添加下载任务: message_id={message.id}, 队列大小={download_queue.qsize()}")
+        logger.debug(f"[{'RETRY' if is_retry else 'NEW'}] 已添加下载任务: message_id={message.id}, 队列大小={ctx.download_queue.qsize()}")
         return True
 
     except asyncio.CancelledError:
@@ -1380,7 +1368,7 @@ async def retry_producer(client: pyrogram.Client):
 
     while getattr(app, 'is_running', True) and not getattr(app, 'force_exit', False):
         try:
-            if download_queue.qsize() >= queue_manager.download_queue_size:
+            if ctx.download_queue.qsize() >= queue_manager.download_queue_size:
                 await asyncio.sleep(1)
                 continue
 
@@ -1609,18 +1597,18 @@ async def download_media(
             media_uid = getattr(_media_check, 'file_unique_id', None)
             if media_uid:
                 threshold = getattr(app, 'download_duplicate_threshold', 5)
-                current_count = _media_download_count.get(media_uid, 0)
+                current_count = ctx._media_download_count.get(media_uid, 0)
                 if threshold > 0 and current_count >= threshold:
                     logger.info(
                         f"[DEDUP] 消息 {message.id}: 媒体已下载 {current_count} 次（阈值={threshold}），跳过下载"
                     )
                     if current_count > 0:
-                        _media_download_count[media_uid] = current_count + 1
-                        _save_duplicate_count(_media_download_count)
+                        ctx._media_download_count[media_uid] = current_count + 1
+                        _save_duplicate_count(ctx._media_download_count)
                     return DownloadStatus.SkipDownload, None
                 # Track count even for first download
-                _media_download_count[media_uid] = current_count + 1
-                _save_duplicate_count(_media_download_count)
+                ctx._media_download_count[media_uid] = current_count + 1
+                _save_duplicate_count(ctx._media_download_count)
             break
 
     logger.debug(f"开始下载消息 {message.id}...")
@@ -1780,7 +1768,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
         try:
             # Check cloud upload health before disk check
             if not getattr(app, 'force_exit', False):
-                if not cloud_upload_ok:
+                if not ctx.cloud_upload_ok:
                     if worker_id not in disk_monitor.paused_workers:
                         logger.warning(f"下载Worker {worker_id}: 云端上传验证失败，暂停下载")
                         disk_monitor.paused_workers.add(worker_id)
@@ -1832,19 +1820,19 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
         try:
             # Use timed get to avoid indefinite blocking
             try:
-                message, node = await asyncio.wait_for(download_queue.get(), timeout=1.0)
+                message, node = await asyncio.wait_for(ctx.download_queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
 
             # Re-check exit signal before processing
             if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
                 logger.debug(f"下载Worker {worker_id} 收到退出信号，将任务放回队列")
-                await download_queue.put((message, node))  # Return task to queue
-                download_queue.task_done()
+                await ctx.download_queue.put((message, node))  # Return task to queue
+                ctx.download_queue.task_done()
                 break
 
             if node.is_stop_transmission:
-                download_queue.task_done()
+                ctx.download_queue.task_done()
                 continue
 
             # Log task start; individual step logging is suppressed
@@ -1852,7 +1840,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
 
             try:
                 # Semaphore limits actual concurrent downloads to max_download_task
-                async with download_semaphore:
+                async with ctx.download_semaphore:
                     if node.client:
                         await download_task(node.client, message, node)
                     else:
@@ -1862,7 +1850,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                 logger.debug(f"下载Worker {worker_id} 完成消息 {message.id}")
             except asyncio.CancelledError:
                 logger.info(f"下载Worker {worker_id} 被取消，将消息 {message.id} 放回队列")
-                await download_queue.put((message, node))  # Return task to queue
+                await ctx.download_queue.put((message, node))  # Return task to queue
                 raise
             except OSError as e:
                 logger.error(f"下载Worker {worker_id}: 消息 {message.id} 网络连接错误: {e}")
@@ -1873,7 +1861,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                 retry_count = await record_failed_task(node.chat_id, message.id, f"Download exception: {str(e)}")
                 logger.warning(f"Message {message.id} download exception, recorded to failed list (retry count: {retry_count})")
             finally:
-                download_queue.task_done()
+                ctx.download_queue.task_done()
 
         except asyncio.CancelledError:
             logger.debug(f"下载Worker {worker_id} 被取消")
@@ -2069,21 +2057,21 @@ async def wait_for_queues_to_empty():
     while time.time() - start_time < max_wait_time:
         try:
             # Prefer empty() over qsize() for accuracy
-            download_queue_size = download_queue.qsize() if hasattr(download_queue, 'qsize') else 0
-            notify_queue_size = notify_queue.qsize() if hasattr(notify_queue, 'qsize') else 0
+            download_queue_size = ctx.download_queue.qsize() if hasattr(ctx.download_queue, 'qsize') else 0
+            notify_queue_size = ctx.notify_queue.qsize() if hasattr(ctx.notify_queue, 'qsize') else 0
 
             logger.debug(f"队列状态: 下载队列={download_queue_size}, 通知队列={notify_queue_size}")
 
             # More accurate emptiness check
-            is_download_queue_empty = download_queue.empty() if hasattr(download_queue, 'empty') else (
+            is_download_queue_empty = ctx.download_queue.empty() if hasattr(ctx.download_queue, 'empty') else (
                         download_queue_size == 0)
-            is_notify_queue_empty = notify_queue.empty() if hasattr(notify_queue, 'empty') else (notify_queue_size == 0)
+            is_notify_queue_empty = ctx.notify_queue.empty() if hasattr(ctx.notify_queue, 'empty') else (notify_queue_size == 0)
 
             if is_download_queue_empty and is_notify_queue_empty:
                 # Check unfinished task counter
-                unfinished_download_tasks = download_queue._unfinished_tasks if hasattr(download_queue,
+                unfinished_download_tasks = ctx.download_queue._unfinished_tasks if hasattr(ctx.download_queue,
                                                                                         '_unfinished_tasks') else 0
-                unfinished_notify_tasks = notify_queue._unfinished_tasks if hasattr(notify_queue,
+                unfinished_notify_tasks = ctx.notify_queue._unfinished_tasks if hasattr(ctx.notify_queue,
                                                                                     '_unfinished_tasks') else 0
 
                 if unfinished_download_tasks == 0 and unfinished_notify_tasks == 0:
@@ -2102,10 +2090,10 @@ async def wait_for_queues_to_empty():
 
     # Drain download queue
     try:
-        while not download_queue.empty():
+        while not ctx.download_queue.empty():
             try:
-                download_queue.get_nowait()
-                download_queue.task_done()
+                ctx.download_queue.get_nowait()
+                ctx.download_queue.task_done()
             except (asyncio.QueueEmpty, ValueError):
                 break
     except Exception as e:
@@ -2113,10 +2101,10 @@ async def wait_for_queues_to_empty():
 
     # Drain notification queue
     try:
-        while not notify_queue.empty():
+        while not ctx.notify_queue.empty():
             try:
-                notify_queue.get_nowait()
-                notify_queue.task_done()
+                ctx.notify_queue.get_nowait()
+                ctx.notify_queue.task_done()
             except (asyncio.QueueEmpty, ValueError):
                 break
     except Exception as e:
@@ -2143,8 +2131,7 @@ def main():
         app.pre_run()
         init_web(app)
 
-        global _media_download_count
-        _media_download_count = _load_duplicate_count()
+        ctx._media_download_count = _load_duplicate_count()
 
         # Print config summary
         print_config_summary(app)
@@ -2172,10 +2159,9 @@ def main():
         queue_manager.update_limits()
 
         # Re-initialize queues and semaphore with configured sizes
-        global download_queue, notify_queue, download_semaphore
-        download_queue = asyncio.Queue(maxsize=queue_manager.download_queue_size)
-        notify_queue = asyncio.Queue(maxsize=100)
-        download_semaphore = asyncio.Semaphore(queue_manager.max_download_tasks)
+        ctx.download_queue = asyncio.Queue(maxsize=queue_manager.download_queue_size)
+        ctx.notify_queue = asyncio.Queue(maxsize=100)
+        ctx.download_semaphore = asyncio.Semaphore(queue_manager.max_download_tasks)
 
         logger.info(f"下载队列大小已设置为: {queue_manager.download_queue_size}")
 
@@ -2211,8 +2197,7 @@ def main():
                 if cloud_ok:
                     logger.success(f"☁️  {cloud_msg}")
                 else:
-                    global cloud_upload_ok
-                    cloud_upload_ok = False
+                    ctx.cloud_upload_ok = False
                     logger.error(f"☁️  {cloud_msg}")
                     await notification_manager.send_event_notification("startup", "☁️ 云端写入验证失败，下载暂停", cloud_msg, "error")
                     logger.warning("☁️ 云端写入测试失败：download worker 已暂停，等待云端恢复后自动继续")
