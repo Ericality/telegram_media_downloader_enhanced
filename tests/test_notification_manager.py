@@ -1,6 +1,6 @@
 """Tests for NotificationManager."""
 import media_downloader as md
-from media_downloader import NotificationManager
+from services.notifier import NotificationManager
 
 
 def _notifications(bark_enabled=False, bark_events=None, syno_enabled=False, syno_events=None):
