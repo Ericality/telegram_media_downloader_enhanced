@@ -1,5 +1,6 @@
 """Tests for persistent storage helpers (seen media / duplicate count / failed tasks)."""
 import asyncio
+from unittest import mock
 
 import media_downloader as md
 from core.storage import (_load_duplicate_count, _load_seen_media, _save_duplicate_count, _save_seen_media, load_failed_tasks, record_failed_task, remove_failed_task)
@@ -95,3 +96,60 @@ def test_remove_failed_task_nonexistent(tmp_path):
     removed = asyncio.run(remove_failed_task(123, 999))
     assert removed is False
     assert len(asyncio.run(load_failed_tasks(123))) == 1
+
+
+def test_save_seen_media_write_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    with mock.patch("core.storage.open", side_effect=OSError("disk full")):
+        _save_seen_media({"a"})  # 不抛异常
+
+
+def test_load_duplicate_count_read_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    (tmp_path / DUPLICATE_COUNT_FILE).write_text('{"x": 1}')
+    with mock.patch("core.storage.open", side_effect=OSError("boom")):
+        assert _load_duplicate_count() == {}
+
+
+def test_save_duplicate_count_write_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    with mock.patch("core.storage.open", side_effect=OSError("disk full")):
+        _save_duplicate_count({"x": 1})  # 不抛异常
+
+
+def test_record_failed_task_legacy_format_migration(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    md.app.chat_download_config = {}
+    (tmp_path / "failed_tasks.json").write_text('{"old": "format"}')
+    retry_count = asyncio.run(record_failed_task(123, 456, "e"))
+    assert retry_count == 0
+    tasks = asyncio.run(load_failed_tasks(123))
+    assert len(tasks) == 1
+
+
+def test_record_failed_task_io_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    md.app.chat_download_config = {}
+    with mock.patch("core.storage.open", side_effect=OSError("boom")):
+        retry_count = asyncio.run(record_failed_task(123, 456, "e"))
+    assert retry_count == 0
+
+
+def test_load_failed_tasks_non_list(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    (tmp_path / "failed_tasks.json").write_text('{"not": "list"}')
+    assert asyncio.run(load_failed_tasks(123)) == []
+
+
+def test_load_failed_tasks_io_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    (tmp_path / "failed_tasks.json").write_text('[]')
+    with mock.patch("core.storage.open", side_effect=OSError("boom")):
+        assert asyncio.run(load_failed_tasks(123)) == []
+
+
+def test_remove_failed_task_io_error(tmp_path):
+    md.app.session_file_path = str(tmp_path)
+    (tmp_path / "failed_tasks.json").write_text('[]')
+    with mock.patch("core.storage.open", side_effect=OSError("boom")):
+        assert asyncio.run(remove_failed_task(123, 1)) is False
