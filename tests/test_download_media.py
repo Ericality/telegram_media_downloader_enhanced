@@ -3,6 +3,7 @@ import asyncio
 from datetime import datetime
 from unittest import mock
 
+import core.context as ctx
 import media_downloader as md
 from media_downloader import DownloadStatus, TaskNode, download_media
 from module.pyrogram_extension import reset_download_cache
@@ -43,8 +44,8 @@ def _reset_state():
     reset_download_cache()
     md.app.hide_file_name = False
     md.app.download_duplicate_threshold = 5
-    md._media_download_count.clear()
-    md._media_seen.clear()
+    ctx._media_download_count.clear()
+    ctx._media_seen.clear()
 
 
 def test_download_media_success():
@@ -73,7 +74,7 @@ def test_download_media_success():
 
 def test_download_media_skip_duplicate():
     _reset_state()
-    md._media_download_count["UNIQUE_1"] = 5
+    ctx._media_download_count["UNIQUE_1"] = 5
     message = _make_message(file_unique_id="UNIQUE_1")
     node = TaskNode(chat_id=-123)
     client = mock.AsyncMock()

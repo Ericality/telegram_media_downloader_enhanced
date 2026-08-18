@@ -2,6 +2,7 @@
 import asyncio
 from unittest import mock
 
+import core.context as ctx
 import media_downloader as md
 from media_downloader import DownloadStatus, TaskNode
 
@@ -12,7 +13,7 @@ def _reset():
     md.app.force_exit = False
     md.app.is_running = True
     md.app.chat_download_config = {}
-    md.download_queue = asyncio.Queue()
+    ctx.download_queue = asyncio.Queue()
     md.queue_manager.task_added = 0
     md.queue_manager.task_processed = 0
 
@@ -45,7 +46,7 @@ def test_add_download_task_success():
         ok = asyncio.run(md.add_download_task(message, node))
 
     assert ok is True
-    assert md.download_queue.qsize() == 1
+    assert ctx.download_queue.qsize() == 1
     assert node.download_status[5] == DownloadStatus.Downloading
     assert node.total_task == 1
     assert md.queue_manager.task_added == 1

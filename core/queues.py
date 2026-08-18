@@ -3,8 +3,6 @@ import asyncio
 
 from loguru import logger
 
-from core.context import app
-
 
 class QueueManager:
     """Download queue manager.
@@ -22,6 +20,7 @@ class QueueManager:
 
     def update_limits(self):
         """Update queue limits from config."""
+        from core.context import app
         self.max_download_tasks = getattr(app, 'max_download_task', 5)
         # Read notify worker count from config
         bark_config = getattr(app, 'bark_notification', {})
