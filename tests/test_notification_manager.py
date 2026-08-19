@@ -3,10 +3,15 @@ import media_downloader as md
 from services.notifier import NotificationManager
 
 
-def _notifications(bark_enabled=False, bark_events=None, syno_enabled=False, syno_events=None):
+def _notifications(
+    bark_enabled=False, bark_events=None, syno_enabled=False, syno_events=None
+):
     return {
         "bark": {"enabled": bark_enabled, "events_to_notify": bark_events or []},
-        "synology_chat": {"enabled": syno_enabled, "events_to_notify": syno_events or []},
+        "synology_chat": {
+            "enabled": syno_enabled,
+            "events_to_notify": syno_events or [],
+        },
         "global": {},
     }
 
@@ -18,7 +23,10 @@ def test_load_config_both_enabled():
     assert nm.bark_enabled is True
     assert nm.synology_chat_enabled is True
     assert nm.bark_config == {"enabled": True, "events_to_notify": ["startup"]}
-    assert nm.synology_chat_config == {"enabled": True, "events_to_notify": ["shutdown"]}
+    assert nm.synology_chat_config == {
+        "enabled": True,
+        "events_to_notify": ["shutdown"],
+    }
 
 
 def test_load_config_all_disabled():

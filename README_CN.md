@@ -267,5 +267,5 @@ proxy:
 
 ### 鸣谢
 
-本项目基于 [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader)，原作者为 [tangyoha](https://github.com/tangyoha)。  
+本项目基于 [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader)，原作者为 [tangyoha](https://github.com/tangyoha)。
 原始设计和实现的所有功劳归于原作者。

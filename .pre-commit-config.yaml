@@ -1,5 +1,7 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+# 排除运行时数据 / 静态资源（不应被 pre-commit 修改）
+exclude: '^(sessions/|module/failed_tasks.json|module/static/|module/templates/|screenshot/|\.venv/|downloads/|log/|temp/)'
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0

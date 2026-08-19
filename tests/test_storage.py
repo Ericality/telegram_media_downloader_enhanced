@@ -3,8 +3,17 @@ import asyncio
 from unittest import mock
 
 import media_downloader as md
-from core.storage import (_load_duplicate_count, _load_seen_media, _save_duplicate_count, _save_seen_media, load_failed_tasks, record_failed_task, remove_failed_task)
-from core.storage import DEDUP_DB_FILE, DUPLICATE_COUNT_FILE
+from core.storage import (
+    DEDUP_DB_FILE,
+    DUPLICATE_COUNT_FILE,
+    _load_duplicate_count,
+    _load_seen_media,
+    _save_duplicate_count,
+    _save_seen_media,
+    load_failed_tasks,
+    record_failed_task,
+    remove_failed_task,
+)
 
 
 def test_save_and_load_seen_media(tmp_path):
@@ -143,13 +152,13 @@ def test_load_failed_tasks_non_list(tmp_path):
 
 def test_load_failed_tasks_io_error(tmp_path):
     md.app.session_file_path = str(tmp_path)
-    (tmp_path / "failed_tasks.json").write_text('[]')
+    (tmp_path / "failed_tasks.json").write_text("[]")
     with mock.patch("core.storage.open", side_effect=OSError("boom")):
         assert asyncio.run(load_failed_tasks(123)) == []
 
 
 def test_remove_failed_task_io_error(tmp_path):
     md.app.session_file_path = str(tmp_path)
-    (tmp_path / "failed_tasks.json").write_text('[]')
+    (tmp_path / "failed_tasks.json").write_text("[]")
     with mock.patch("core.storage.open", side_effect=OSError("boom")):
         assert asyncio.run(remove_failed_task(123, 1)) is False

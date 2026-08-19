@@ -4,7 +4,13 @@ from unittest import mock
 import pyrogram
 
 import media_downloader as md
-from workers.download import (_can_download, _check_download_finish, _check_timeout, _is_exist, _move_to_download_path)
+from workers.download import (
+    _can_download,
+    _check_download_finish,
+    _check_timeout,
+    _is_exist,
+    _move_to_download_path,
+)
 
 
 def test_can_download_all():
@@ -46,16 +52,18 @@ def test_check_timeout():
 
 
 def test_check_download_finish_size_matches():
-    with mock.patch("workers.download.os.path.getsize", return_value=100) as getsize, \
-            mock.patch("workers.download.os.remove") as os_remove:
+    with mock.patch(
+        "workers.download.os.path.getsize", return_value=100
+    ) as getsize, mock.patch("workers.download.os.remove") as os_remove:
         _check_download_finish(100, "/tmp/x.mp4", "x.mp4")
         getsize.assert_called_once_with("/tmp/x.mp4")
         os_remove.assert_not_called()
 
 
 def test_check_download_finish_size_mismatch_raises():
-    with mock.patch("workers.download.os.path.getsize", return_value=50), \
-            mock.patch("workers.download.os.remove") as os_remove:
+    with mock.patch("workers.download.os.path.getsize", return_value=50), mock.patch(
+        "workers.download.os.remove"
+    ) as os_remove:
         try:
             _check_download_finish(100, "/tmp/x.mp4", "x.mp4")
             assert False, "expected BadRequest to be raised"
@@ -65,8 +73,9 @@ def test_check_download_finish_size_mismatch_raises():
 
 
 def test_move_to_download_path():
-    with mock.patch("workers.download.os.makedirs") as makedirs, \
-            mock.patch("workers.download.shutil.move") as move:
+    with mock.patch("workers.download.os.makedirs") as makedirs, mock.patch(
+        "workers.download.shutil.move"
+    ) as move:
         _move_to_download_path("/tmp/a.mp4", "/final/dir/b.mp4")
         makedirs.assert_called_once_with("/final/dir", exist_ok=True)
         move.assert_called_once_with("/tmp/a.mp4", "/final/dir/b.mp4")

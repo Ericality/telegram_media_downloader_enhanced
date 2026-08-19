@@ -263,5 +263,5 @@ This project is a personal enhancement. Issues and PRs are welcome!
 
 ### Credits
 
-This project is based on [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader), originally created by [tangyoha](https://github.com/tangyoha).  
+This project is based on [tangyoha/telegram_media_downloader](https://github.com/tangyoha/telegram_media_downloader), originally created by [tangyoha](https://github.com/tangyoha).
 All credit for the original design and implementation goes to the original author.

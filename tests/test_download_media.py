@@ -6,8 +6,8 @@ from unittest import mock
 import core.context as ctx
 import media_downloader as md
 from core.models import DownloadStatus, TaskNode
-from services.downloader import download_media
 from module.pyrogram_extension import reset_download_cache
+from services.downloader import download_media
 
 from .test_common import MockMessage, MockVideo
 
@@ -59,14 +59,23 @@ def test_download_media_success():
     client = mock.AsyncMock()
     client.download_media = mock.AsyncMock(return_value="/tmp/sample.mp4")
 
-    with mock.patch("services.downloader.fetch_message", side_effect=_async_identity), \
-            mock.patch("workers.download._get_media_meta", side_effect=_meta_mp4), \
-            mock.patch("workers.download._is_exist", return_value=False), \
-            mock.patch("workers.download._check_download_finish"), \
-            mock.patch("workers.download._move_to_download_path"), \
-            mock.patch("services.downloader._save_duplicate_count"), \
-            mock.patch("services.downloader._save_seen_media"), \
-            mock.patch("services.downloader.asyncio.sleep", side_effect=_async_noop):
+    with mock.patch(
+        "services.downloader.fetch_message", side_effect=_async_identity
+    ), mock.patch(
+        "workers.download._get_media_meta", side_effect=_meta_mp4
+    ), mock.patch(
+        "workers.download._is_exist", return_value=False
+    ), mock.patch(
+        "workers.download._check_download_finish"
+    ), mock.patch(
+        "workers.download._move_to_download_path"
+    ), mock.patch(
+        "services.downloader._save_duplicate_count"
+    ), mock.patch(
+        "services.downloader._save_seen_media"
+    ), mock.patch(
+        "services.downloader.asyncio.sleep", side_effect=_async_noop
+    ):
         status, fname = asyncio.run(
             download_media(client, message, ["video"], {"video": ["all"]}, node)
         )
@@ -83,8 +92,9 @@ def test_download_media_skip_duplicate():
     node = TaskNode(chat_id=-123)
     client = mock.AsyncMock()
 
-    with mock.patch("services.downloader.fetch_message", side_effect=_async_identity), \
-            mock.patch("services.downloader._save_duplicate_count"):
+    with mock.patch(
+        "services.downloader.fetch_message", side_effect=_async_identity
+    ), mock.patch("services.downloader._save_duplicate_count"):
         status, fname = asyncio.run(
             download_media(client, message, ["video"], {"video": ["all"]}, node)
         )
@@ -100,9 +110,13 @@ def test_download_media_skip_disallowed_format():
     node = TaskNode(chat_id=-123)
     client = mock.AsyncMock()
 
-    with mock.patch("services.downloader.fetch_message", side_effect=_async_identity), \
-            mock.patch("workers.download._get_media_meta", side_effect=_meta_avi), \
-            mock.patch("workers.download._is_exist", return_value=False):
+    with mock.patch(
+        "services.downloader.fetch_message", side_effect=_async_identity
+    ), mock.patch(
+        "workers.download._get_media_meta", side_effect=_meta_avi
+    ), mock.patch(
+        "workers.download._is_exist", return_value=False
+    ):
         status, fname = asyncio.run(
             download_media(client, message, ["video"], {"video": ["mp4"]}, node)
         )
@@ -118,10 +132,15 @@ def test_download_media_skip_existing_file():
     node = TaskNode(chat_id=-123)
     client = mock.AsyncMock()
 
-    with mock.patch("services.downloader.fetch_message", side_effect=_async_identity), \
-            mock.patch("workers.download._get_media_meta", side_effect=_meta_mp4), \
-            mock.patch("workers.download._is_exist", return_value=True), \
-            mock.patch("media_downloader.os.path.getsize", return_value=1024):
+    with mock.patch(
+        "services.downloader.fetch_message", side_effect=_async_identity
+    ), mock.patch(
+        "workers.download._get_media_meta", side_effect=_meta_mp4
+    ), mock.patch(
+        "workers.download._is_exist", return_value=True
+    ), mock.patch(
+        "media_downloader.os.path.getsize", return_value=1024
+    ):
         status, fname = asyncio.run(
             download_media(client, message, ["video"], {"video": ["all"]}, node)
         )
