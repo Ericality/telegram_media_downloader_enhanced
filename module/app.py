@@ -788,9 +788,9 @@ class Application:
                 logger.error("配置文件不存在且无可用备份")
                 return False
 
-        # Load config file
+        # Load config file (round-trip mode preserves comments / formatting)
         try:
-            yaml_loader = YAML(typ='safe')
+            yaml_loader = YAML()
             yaml_loader.allow_duplicate_keys = True
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = yaml_loader.load(f)
