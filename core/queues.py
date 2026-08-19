@@ -21,9 +21,9 @@ class QueueManager:
     def update_limits(self):
         """Update queue limits from config."""
         from core.context import app
-        self.max_download_tasks = getattr(app, 'max_download_task', 5)
+        self.max_download_tasks = app.get_config('max_download_task', 5)
         # Read notify worker count from config
-        bark_config = getattr(app, 'bark_notification', {})
+        bark_config = app.get_config('bark_notification', {})
         self.max_notify_tasks = bark_config.get('notify_worker_count', 1)
         # Queue size set to worker count
         self.download_queue_size = self.max_download_tasks

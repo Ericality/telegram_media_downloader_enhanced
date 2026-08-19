@@ -93,7 +93,7 @@ async def collect_stats_async() -> Dict[str, Any]:
         # Get download directory size
         download_dir_size_gb = 0
         try:
-            download_dir = app.save_path
+            download_dir = app.get_config('save_path')
             if download_dir and os.path.exists(download_dir):
                 download_dir_size = await asyncio.to_thread(calculate_directory_size, download_dir)
                 download_dir_size_gb = download_dir_size / (1024 ** 3)

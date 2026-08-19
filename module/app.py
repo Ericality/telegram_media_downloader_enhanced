@@ -220,6 +220,7 @@ class Application:
         self.total_download_task = 0
         self.chat_download_config: dict = {}
         self.config: dict = {}
+        self._config: dict = {}  # unified config store (single source of truth)
         self.app_data: dict = {}
         self.cloud_drive_config = CloudDriveConfig()
         self.caption_name_dict: dict = {}
@@ -241,6 +242,16 @@ class Application:
         """Initialize all config items from schema."""
         for key, (default_value, value_type, converter) in ConfigSchema.get_all_configs().items():
             setattr(self, key, default_value)
+            self._config[key] = default_value
+
+    def get_config(self, key: str, default=None):
+        """Unified config accessor — single entry point for config reads.
+
+        All modules should read config through this instead of accessing
+        ``app.<key>`` attributes directly. Values are read from instance
+        attributes (populated by ``assign_config`` / schema defaults).
+        """
+        return getattr(self, key, default)
 
     def _load_and_convert_value(self, key: str, raw_value: Any) -> Any:
         """Load and convert a config value."""
@@ -367,6 +378,7 @@ class Application:
                 raw_value = _config[key]
                 converted_value = self._load_and_convert_value(key, raw_value)
                 setattr(self, key, converted_value)
+                self._config[key] = converted_value
 
                 # Log value (mask credentials)
                 if key in ['api_id', 'api_hash', 'bot_token', 'web_login_secret']:
@@ -995,9 +1007,11 @@ class Application:
 
             # Set on instance attributes
             self.notifications = notifications_config
+            self._config["notifications"] = notifications_config
 
             # Set bark_notification for backward compatibility
             self.bark_notification = notifications_config.get("bark", {})
+            self._config["bark_notification"] = self.bark_notification
 
             logger.debug(f"已加载通知配置: Bark={notifications_config['bark'].get('enabled', False)}, "
                          f"SynologyChat={notifications_config['synology_chat'].get('enabled', False)}")
@@ -1005,4 +1019,6 @@ class Application:
             # Use defaults if no notifications config present
             self.notifications = ConfigSchema.get_default("notifications")
             self.bark_notification = self.notifications.get("bark", {})
+            self._config["notifications"] = self.notifications
+            self._config["bark_notification"] = self.bark_notification
             logger.debug("使用默认通知配置")

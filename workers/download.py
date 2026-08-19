@@ -86,7 +86,7 @@ async def _get_media_meta(
         dirname = validate_title(f"{message.chat.title}")
 
     if message.date:
-        datetime_dir_name = message.date.strftime(app.date_format)
+        datetime_dir_name = message.date.strftime(app.get_config('date_format'))
     else:
         datetime_dir_name = "0"
 
@@ -100,7 +100,7 @@ async def _get_media_meta(
             file_format,
         )
         file_name = validate_title(file_name)
-        temp_file_name = os.path.join(app.temp_save_path, dirname, file_name)
+        temp_file_name = os.path.join(app.get_config('temp_save_path'), dirname, file_name)
         file_name = os.path.join(file_save_path, file_name)
     else:
         file_name = getattr(media_obj, "file_name", None)
@@ -136,7 +136,7 @@ async def _get_media_meta(
         )
 
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-        temp_file_name = os.path.join(app.temp_save_path, dirname, gen_file_name)
+        temp_file_name = os.path.join(app.get_config('temp_save_path'), dirname, gen_file_name)
         file_name = os.path.join(file_save_path, gen_file_name)
 
     return truncate_filename(file_name), truncate_filename(temp_file_name), file_format
