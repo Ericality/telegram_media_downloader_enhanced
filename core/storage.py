@@ -15,7 +15,7 @@ FAILED_TASKS_FILE = "failed_tasks.json"
 
 def _load_seen_media() -> set:
     """Load previously seen media IDs from disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    db_path = os.path.join(app.get_config('session_file_path'), DEDUP_DB_FILE)
     if os.path.exists(db_path):
         try:
             with open(db_path, 'r', encoding='utf-8') as f:
@@ -31,7 +31,7 @@ def _load_seen_media() -> set:
 
 def _save_seen_media(seen: set):
     """Persist seen media IDs to disk."""
-    db_path = os.path.join(app.session_file_path, DEDUP_DB_FILE)
+    db_path = os.path.join(app.get_config('session_file_path'), DEDUP_DB_FILE)
     try:
         with open(db_path, 'w', encoding='utf-8') as f:
             json.dump(list(seen), f, ensure_ascii=False)
@@ -41,7 +41,7 @@ def _save_seen_media(seen: set):
 
 def _load_duplicate_count() -> Dict[str, int]:
     """Load duplicate download counts from disk."""
-    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
+    db_path = os.path.join(app.get_config('session_file_path'), DUPLICATE_COUNT_FILE)
     if os.path.exists(db_path):
         try:
             with open(db_path, 'r', encoding='utf-8') as f:
@@ -56,7 +56,7 @@ def _load_duplicate_count() -> Dict[str, int]:
 
 def _save_duplicate_count(counts: Dict[str, int]):
     """Persist duplicate download counts to disk."""
-    db_path = os.path.join(app.session_file_path, DUPLICATE_COUNT_FILE)
+    db_path = os.path.join(app.get_config('session_file_path'), DUPLICATE_COUNT_FILE)
     try:
         with open(db_path, 'w', encoding='utf-8') as f:
             json.dump(counts, f, ensure_ascii=False, indent=2)
@@ -67,7 +67,7 @@ def _save_duplicate_count(counts: Dict[str, int]):
 async def record_failed_task(chat_id: Union[int, str], message_id: int, error_msg: str):
     """Record a failed task for retry (no retry limit)."""
     try:
-        failed_tasks_file = os.path.join(app.session_file_path, FAILED_TASKS_FILE)
+        failed_tasks_file = os.path.join(app.get_config('session_file_path'), FAILED_TASKS_FILE)
         tasks = []
 
         if os.path.exists(failed_tasks_file):
@@ -128,7 +128,7 @@ async def record_failed_task(chat_id: Union[int, str], message_id: int, error_ms
 async def load_failed_tasks(chat_id: Union[int, str]) -> list:
     """Load failed tasks for a given chat (flat-array format)."""
     try:
-        failed_tasks_file = os.path.join(app.session_file_path, FAILED_TASKS_FILE)
+        failed_tasks_file = os.path.join(app.get_config('session_file_path'), FAILED_TASKS_FILE)
         if not os.path.exists(failed_tasks_file):
             return []
 
@@ -147,7 +147,7 @@ async def load_failed_tasks(chat_id: Union[int, str]) -> list:
 async def remove_failed_task(chat_id: Union[int, str], message_id: int):
     """Remove a successfully completed task from the failed list (flat array)."""
     try:
-        failed_tasks_file = os.path.join(app.session_file_path, FAILED_TASKS_FILE)
+        failed_tasks_file = os.path.join(app.get_config('session_file_path'), FAILED_TASKS_FILE)
         if not os.path.exists(failed_tasks_file):
             return False
 

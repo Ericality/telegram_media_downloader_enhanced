@@ -22,25 +22,30 @@ class NotificationManager:
     def __init__(self):
         self.bark_enabled = False
         self.synology_chat_enabled = False
-        self.bark_config = {}
-        self.synology_chat_config = {}
-        self.global_config = {}
+
+    def _notifications(self) -> dict:
+        """Read notifications config live from the unified app config store."""
+        return app.get_config('notifications', {})
+
+    @property
+    def bark_config(self) -> dict:
+        """Bark notification config (live, no cached copy)."""
+        return self._notifications().get('bark', {})
+
+    @property
+    def synology_chat_config(self) -> dict:
+        """Synology Chat config (live, no cached copy)."""
+        return self._notifications().get('synology_chat', {})
+
+    @property
+    def global_config(self) -> dict:
+        """Global notification config (live, no cached copy)."""
+        return self._notifications().get('global', {})
 
     def load_config(self):
         """Load notification config from app settings."""
-        notifications_config = getattr(app, 'notifications', {})
-
-        # Bark config
-        self.bark_config = notifications_config.get('bark', {})
         self.bark_enabled = self.bark_config.get('enabled', False)
-
-        # Synology Chat config
-        self.synology_chat_config = notifications_config.get('synology_chat', {})
         self.synology_chat_enabled = self.synology_chat_config.get('enabled', False)
-
-        # Global config
-        self.global_config = notifications_config.get('global', {})
-
         logger.info(f"通知管理器加载: Bark={self.bark_enabled}, 群晖Chat={self.synology_chat_enabled}")
 
     def should_notify(self, event_type: str, notification_type: str = None) -> bool:
@@ -202,7 +207,7 @@ async def send_bark_notification_sync(
 ):
     """Send Bark notification synchronously with retry and group/level support."""
     if not url:
-        bark_config = getattr(app, 'bark_notification', {})
+        bark_config = app.get_config('bark_notification', {})
         if not bark_config.get('enabled', False):
             return False
         url = bark_config.get('url', '')
@@ -216,7 +221,7 @@ async def send_bark_notification_sync(
         url = f"https://{url}"
 
     # Get default group, level and sound from config
-    bark_config = getattr(app, 'bark_notification', {})
+    bark_config = app.get_config('bark_notification', {})
     default_group = bark_config.get('default_group', 'TelegramDownloader')
     default_level = bark_config.get('default_level', 'active')
     sound = bark_config.get('sound', 'alarm')
@@ -325,7 +330,7 @@ async def send_synology_chat_notification_sync(
 ) -> bool:
     """Send Synology Chat notification synchronously (url-encoded format)."""
     # Get config
-    notifications_config = getattr(app, 'notifications', {})
+    notifications_config = app.get_config('notifications', {})
     synology_config = notifications_config.get('synology_chat', {})
 
     if not synology_config.get('enabled', False):

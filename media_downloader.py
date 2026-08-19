@@ -359,11 +359,11 @@ def main():
         # Initialize Pyrogram client
         client = HookClient(
             "media_downloader",
-            api_id=app.api_id,
-            api_hash=app.api_hash,
-            proxy=app.proxy,
-            workdir=app.session_file_path,
-            start_timeout=app.start_timeout,
+            api_id=app.get_config('api_id'),
+            api_hash=app.get_config('api_hash'),
+            proxy=app.get_config('proxy'),
+            workdir=app.get_config('session_file_path'),
+            start_timeout=app.get_config('start_timeout'),
         )
 
         # Update queue manager limits
@@ -430,7 +430,7 @@ def main():
                 sys.exit(1)
 
         app.loop.set_exception_handler(global_exception_handler)
-        set_max_concurrent_transmissions(client, app.max_concurrent_transmissions)
+        set_max_concurrent_transmissions(client, app.get_config('max_concurrent_transmissions'))
 
         # Start Pyrogram client
         app.loop.run_until_complete(start_server(client))
@@ -473,7 +473,7 @@ def main():
         app.loop.run_until_complete(asyncio.sleep(3))
 
         # Step 4: Start bot if configured
-        if app.bot_token:
+        if app.get_config('bot_token'):
             logger.info("启动下载机器人...")
             bot_task = app.loop.create_task(
                 start_download_bot(app, client, add_download_task, download_chat_task)
@@ -570,7 +570,7 @@ def main():
         except:
             pass
 
-        if app.bot_token:
+        if app.get_config('bot_token'):
             try:
                 app.loop.run_until_complete(stop_download_bot())
             except:
