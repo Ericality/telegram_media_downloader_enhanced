@@ -311,8 +311,10 @@ class Application:
 
         # Handle config keys not in schema
         known_keys = set(ConfigSchema.BASE_CONFIG.keys()) | set(ConfigSchema.NOTIFICATION_CONFIG.keys())
+        # Keys with dedicated processing handlers (not "unknown" even though not in schema)
+        dedicated_keys = {"chat", "upload_drive", "bark_notification", "ids_to_retry", "chat_id", "download_filter"}
         for key, value in _config.items():
-            if key not in known_keys and not hasattr(self, key):
+            if key not in known_keys and key not in dedicated_keys and not hasattr(self, key):
                 # Set unknown keys as attributes directly
                 setattr(self, key, value)
                 logger.debug(f"加载未声明配置项 {key}: {value}")
