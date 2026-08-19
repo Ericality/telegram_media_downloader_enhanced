@@ -27,7 +27,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm /tmp/rclone.deb \
     && apt-get remove -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
-COPY setup.py media_downloader.py /app/
+COPY setup.py main.py media_downloader.py /app/
+COPY core /app/core
+COPY services /app/services
+COPY workers /app/workers
 COPY module /app/module
 COPY utils /app/utils
 
