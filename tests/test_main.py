@@ -11,23 +11,54 @@ def _build_mocks(stack):
     stack.enter_context(mock.patch("media_downloader.setup_exit_signal_handlers"))
     stack.enter_context(mock.patch("media_downloader.init_web"))
     stack.enter_context(mock.patch("media_downloader.print_config_summary"))
-    stack.enter_context(mock.patch("media_downloader.check_config_consistency", return_value=[]))
+    stack.enter_context(
+        mock.patch("media_downloader.check_config_consistency", return_value=[])
+    )
     stack.enter_context(mock.patch("media_downloader.HookClient"))
     qm = stack.enter_context(mock.patch("media_downloader.queue_manager"))
     nm = stack.enter_context(mock.patch("media_downloader.notification_manager"))
-    stack.enter_context(mock.patch("media_downloader.start_server", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.start_notify_workers", new=mock.AsyncMock(return_value=[])))
-    stack.enter_context(mock.patch("media_downloader.start_download_workers", new=mock.AsyncMock(return_value=[])))
-    stack.enter_context(mock.patch("media_downloader.download_all_chat", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.run_until_all_task_finish", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.graceful_shutdown", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.stop_server", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.stop_download_bot", new=mock.AsyncMock()))
+    stack.enter_context(
+        mock.patch("media_downloader.start_server", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch(
+            "media_downloader.start_notify_workers", new=mock.AsyncMock(return_value=[])
+        )
+    )
+    stack.enter_context(
+        mock.patch(
+            "media_downloader.start_download_workers",
+            new=mock.AsyncMock(return_value=[]),
+        )
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.download_all_chat", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.run_until_all_task_finish", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.graceful_shutdown", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.stop_server", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.stop_download_bot", new=mock.AsyncMock())
+    )
     stack.enter_context(mock.patch("media_downloader.set_max_concurrent_transmissions"))
-    stack.enter_context(mock.patch("media_downloader.disk_space_monitor_task", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.stats_notification_task", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.queue_monitor_task", new=mock.AsyncMock()))
-    stack.enter_context(mock.patch("media_downloader.asyncio.sleep", new=mock.AsyncMock()))
+    stack.enter_context(
+        mock.patch("media_downloader.disk_space_monitor_task", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.stats_notification_task", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.queue_monitor_task", new=mock.AsyncMock())
+    )
+    stack.enter_context(
+        mock.patch("media_downloader.asyncio.sleep", new=mock.AsyncMock())
+    )
     stack.enter_context(mock.patch.object(md.app, "update_config", return_value=True))
     return qm, nm
 
@@ -56,6 +87,7 @@ def test_main_handles_keyboard_interrupt():
     md.app.bot_token = ""
     with ExitStack() as stack:
         _build_mocks(stack)
-        stack.enter_context(mock.patch.object(md.app, "pre_run", side_effect=KeyboardInterrupt))
+        stack.enter_context(
+            mock.patch.object(md.app, "pre_run", side_effect=KeyboardInterrupt)
+        )
         main()
-

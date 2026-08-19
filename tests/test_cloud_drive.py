@@ -38,9 +38,11 @@ def test_verify_rclone_remote_success():
     with mock.patch(
         "module.cloud_drive.asyncio.create_subprocess_shell",
         side_effect=_subprocess_ok,
-    ), mock.patch("module.cloud_drive.os.remove"), \
-            mock.patch("module.cloud_drive.os.path.exists", return_value=False), \
-            mock.patch("builtins.open", mock.mock_open(read_data="rclone verify test")):
+    ), mock.patch("module.cloud_drive.os.remove"), mock.patch(
+        "module.cloud_drive.os.path.exists", return_value=False
+    ), mock.patch(
+        "builtins.open", mock.mock_open(read_data="rclone verify test")
+    ):
         ok, msg = asyncio.run(verify_rclone_remote(_make_config()))
 
     assert ok is True
@@ -51,9 +53,11 @@ def test_verify_rclone_remote_content_mismatch():
     with mock.patch(
         "module.cloud_drive.asyncio.create_subprocess_shell",
         side_effect=_subprocess_mismatch,
-    ), mock.patch("module.cloud_drive.os.remove"), \
-            mock.patch("module.cloud_drive.os.path.exists", return_value=False), \
-            mock.patch("builtins.open", mock.mock_open(read_data="rclone verify test")):
+    ), mock.patch("module.cloud_drive.os.remove"), mock.patch(
+        "module.cloud_drive.os.path.exists", return_value=False
+    ), mock.patch(
+        "builtins.open", mock.mock_open(read_data="rclone verify test")
+    ):
         ok, msg = asyncio.run(verify_rclone_remote(_make_config()))
 
     assert ok is False
@@ -64,8 +68,9 @@ def test_verify_rclone_remote_timeout():
     with mock.patch(
         "module.cloud_drive.asyncio.create_subprocess_shell",
         side_effect=asyncio.TimeoutError,
-    ), mock.patch("module.cloud_drive.os.remove"), \
-            mock.patch("module.cloud_drive.os.path.exists", return_value=False):
+    ), mock.patch("module.cloud_drive.os.remove"), mock.patch(
+        "module.cloud_drive.os.path.exists", return_value=False
+    ):
         ok, msg = asyncio.run(verify_rclone_remote(_make_config()))
 
     assert ok is False

@@ -5,7 +5,11 @@ from unittest import mock
 
 import core.context as ctx
 import media_downloader as md
-from services.stats import calculate_directory_size, collect_stats_async, get_storage_summary_text
+from services.stats import (
+    calculate_directory_size,
+    collect_stats_async,
+    get_storage_summary_text,
+)
 
 
 def test_calculate_directory_size(tmp_path):
@@ -26,7 +30,8 @@ def test_collect_stats_async():
     ctx.download_queue = None
 
     with mock.patch(
-        "workers.monitor.check_disk_space", new=mock.AsyncMock(return_value=(True, 20.0, 100.0))
+        "workers.monitor.check_disk_space",
+        new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
     ), mock.patch("workers.monitor.disk_monitor") as dm:
         dm.stats_start_time = datetime(2026, 1, 1)
         dm.stats_since_last_notification = {"download_size": 1048576}
@@ -48,7 +53,8 @@ def test_collect_stats_async_disk_error_safe_defaults():
     ctx.download_queue = None
 
     with mock.patch(
-        "workers.monitor.check_disk_space", new=mock.AsyncMock(side_effect=OSError("boom"))
+        "workers.monitor.check_disk_space",
+        new=mock.AsyncMock(side_effect=OSError("boom")),
     ), mock.patch("workers.monitor.disk_monitor") as dm:
         dm.stats_start_time = datetime(2026, 1, 1)
         dm.stats_since_last_notification = {"download_size": 0}

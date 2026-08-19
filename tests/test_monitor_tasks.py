@@ -37,13 +37,20 @@ def test_disk_space_monitor_task_enabled_runs_once():
         nm.bark_enabled = True
         nm.synology_chat_enabled = True
         nm.bark_config = {"disk_space_threshold_gb": 10.0, "space_check_interval": 300}
-        nm.synology_chat_config = {"disk_space_threshold_gb": 10.0, "space_check_interval": 300}
+        nm.synology_chat_config = {
+            "disk_space_threshold_gb": 10.0,
+            "space_check_interval": 300,
+        }
         nm.send_disk_space_notification = mock.AsyncMock()
 
         with mock.patch(
-            "workers.monitor.check_disk_space", new=mock.AsyncMock(return_value=(True, 20.0, 100.0))
-        ), mock.patch("workers.monitor.asyncio.sleep", new=stop_after_sleep), \
-                mock.patch("workers.monitor.disk_monitor") as dm:
+            "workers.monitor.check_disk_space",
+            new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
+        ), mock.patch(
+            "workers.monitor.asyncio.sleep", new=stop_after_sleep
+        ), mock.patch(
+            "workers.monitor.disk_monitor"
+        ) as dm:
             dm.space_low = False
             dm.last_notification_time = 0
             dm.paused_workers = set()
@@ -66,8 +73,11 @@ def test_stats_notification_task_enabled_runs_once():
         with mock.patch(
             "workers.monitor.collect_stats_async",
             new=mock.AsyncMock(return_value={"uptime": "1s"}),
-        ), mock.patch("workers.monitor.asyncio.sleep", new=stop_after_sleep), \
-                mock.patch("workers.monitor.disk_monitor") as dm:
+        ), mock.patch(
+            "workers.monitor.asyncio.sleep", new=stop_after_sleep
+        ), mock.patch(
+            "workers.monitor.disk_monitor"
+        ) as dm:
             dm.stats_since_last_notification = {}
             asyncio.run(stats_notification_task())
 
@@ -84,10 +94,13 @@ def test_queue_monitor_task_enabled_runs_once():
         nm.global_config = {"queue_monitor_interval": 300}
         nm.send_event_notification = mock.AsyncMock()
 
-        with mock.patch("workers.monitor.ctx") as mock_ctx, \
-                mock.patch("workers.monitor.queue_manager") as qm, \
-                mock.patch("workers.monitor.asyncio.sleep", new=stop_after_sleep), \
-                mock.patch("workers.monitor.disk_monitor") as dm:
+        with mock.patch("workers.monitor.ctx") as mock_ctx, mock.patch(
+            "workers.monitor.queue_manager"
+        ) as qm, mock.patch(
+            "workers.monitor.asyncio.sleep", new=stop_after_sleep
+        ), mock.patch(
+            "workers.monitor.disk_monitor"
+        ) as dm:
             mock_ctx.download_queue.qsize.return_value = 10
             qm.download_queue_size = 10
             qm.max_download_tasks = 4

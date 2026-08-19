@@ -43,7 +43,8 @@ def test_notify_worker_bark_task():
     ctx.notify_queue = asyncio.Queue()
     ctx.notify_queue.put_nowait(_make_bark_task())
     with mock.patch(
-        "workers.notify.send_bark_notification_sync", new=mock.AsyncMock(return_value=True)
+        "workers.notify.send_bark_notification_sync",
+        new=mock.AsyncMock(return_value=True),
     ) as mock_send:
         asyncio.run(notify_worker(1))
     mock_send.assert_awaited_once()
@@ -56,7 +57,8 @@ def test_notify_worker_synology_task():
     ctx.notify_queue = asyncio.Queue()
     ctx.notify_queue.put_nowait(_make_synology_task())
     with mock.patch(
-        "workers.notify.send_synology_chat_notification_sync", new=mock.AsyncMock(return_value=True)
+        "workers.notify.send_synology_chat_notification_sync",
+        new=mock.AsyncMock(return_value=True),
     ) as mock_send:
         asyncio.run(notify_worker(1))
     mock_send.assert_awaited_once()

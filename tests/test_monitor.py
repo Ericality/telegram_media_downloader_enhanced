@@ -12,11 +12,10 @@ def _disk_usage(free_bytes, total_bytes):
 
 def test_check_disk_space_enough():
     md.app.download_path = "/app/downloads"
-    with mock.patch("workers.monitor.os.path.exists", return_value=True), \
-            mock.patch(
-                "workers.monitor.psutil.disk_usage",
-                return_value=_disk_usage(20 * 1024 ** 3, 100 * 1024 ** 3),
-            ):
+    with mock.patch("workers.monitor.os.path.exists", return_value=True), mock.patch(
+        "workers.monitor.psutil.disk_usage",
+        return_value=_disk_usage(20 * 1024**3, 100 * 1024**3),
+    ):
         has_space, free_gb, total_gb = asyncio.run(check_disk_space(10.0))
         assert has_space is True
         assert free_gb == 20.0
@@ -25,11 +24,10 @@ def test_check_disk_space_enough():
 
 def test_check_disk_space_low():
     md.app.download_path = "/app/downloads"
-    with mock.patch("workers.monitor.os.path.exists", return_value=True), \
-            mock.patch(
-                "workers.monitor.psutil.disk_usage",
-                return_value=_disk_usage(5 * 1024 ** 3, 100 * 1024 ** 3),
-            ):
+    with mock.patch("workers.monitor.os.path.exists", return_value=True), mock.patch(
+        "workers.monitor.psutil.disk_usage",
+        return_value=_disk_usage(5 * 1024**3, 100 * 1024**3),
+    ):
         has_space, free_gb, total_gb = asyncio.run(check_disk_space(10.0))
         assert has_space is False
         assert free_gb == 5.0
@@ -38,8 +36,9 @@ def test_check_disk_space_low():
 
 def test_check_disk_space_exception_returns_safe_defaults():
     md.app.download_path = "/app/downloads"
-    with mock.patch("workers.monitor.os.path.exists", return_value=True), \
-            mock.patch("workers.monitor.psutil.disk_usage", side_effect=OSError("boom")):
+    with mock.patch("workers.monitor.os.path.exists", return_value=True), mock.patch(
+        "workers.monitor.psutil.disk_usage", side_effect=OSError("boom")
+    ):
         has_space, free_gb, total_gb = asyncio.run(check_disk_space(10.0))
         assert has_space is False
         assert free_gb == 0

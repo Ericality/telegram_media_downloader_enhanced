@@ -35,9 +35,11 @@ def test_download_worker_processes_task():
 
     client = mock.MagicMock()
     with mock.patch(
-        "workers.download.check_disk_space", new=mock.AsyncMock(return_value=(True, 20.0, 100.0))
-    ), mock.patch("workers.download.disk_monitor") as dm, \
-            mock.patch("services.downloader.download_task", new=_fake_download_task):
+        "workers.download.check_disk_space",
+        new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
+    ), mock.patch("workers.download.disk_monitor") as dm, mock.patch(
+        "services.downloader.download_task", new=_fake_download_task
+    ):
         dm.paused_workers = set()
         asyncio.run(download_worker(client, 1))
 
@@ -56,8 +58,9 @@ def test_download_worker_pauses_when_cloud_down():
     async def stop_after_sleep(*args, **kwargs):
         md.app.is_running = False  # 暂停 sleep 后触发退出
 
-    with mock.patch("workers.download.disk_monitor") as dm, \
-            mock.patch("workers.download.asyncio.sleep", new=stop_after_sleep):
+    with mock.patch("workers.download.disk_monitor") as dm, mock.patch(
+        "workers.download.asyncio.sleep", new=stop_after_sleep
+    ):
         dm.paused_workers = set()
         asyncio.run(download_worker(mock.MagicMock(), 1))
 
@@ -93,12 +96,12 @@ def test_retry_producer_retries_failed_task():
     with mock.patch(
         "workers.download.load_failed_tasks",
         new=mock.AsyncMock(return_value=[{"message_id": 7}]),
-    ), mock.patch("workers.download.add_download_task", new=fake_add), \
-            mock.patch(
-                "workers.download.remove_failed_task",
-                new=mock.AsyncMock(return_value=True),
-            ) as mock_rm, \
-            mock.patch("workers.download.asyncio.sleep", new=mock.AsyncMock()):
+    ), mock.patch("workers.download.add_download_task", new=fake_add), mock.patch(
+        "workers.download.remove_failed_task",
+        new=mock.AsyncMock(return_value=True),
+    ) as mock_rm, mock.patch(
+        "workers.download.asyncio.sleep", new=mock.AsyncMock()
+    ):
         asyncio.run(retry_producer(client))
 
     mock_rm.assert_awaited_once_with(123, 7)
@@ -113,12 +116,15 @@ def test_download_chat_task_adds_task():
     node = TaskNode(chat_id=123)
 
     async def fake_history(*args, **kwargs):
-        yield MockMessage(id=1, media=True, chat_id=123, chat_title="chat", caption="cap")
+        yield MockMessage(
+            id=1, media=True, chat_id=123, chat_title="chat", caption="cap"
+        )
 
-    with mock.patch("workers.download.get_chat_history_v2", new=fake_history), \
-            mock.patch(
-                "workers.download.add_download_task", new=mock.AsyncMock(return_value=True)
-            ) as mock_add:
+    with mock.patch(
+        "workers.download.get_chat_history_v2", new=fake_history
+    ), mock.patch(
+        "workers.download.add_download_task", new=mock.AsyncMock(return_value=True)
+    ) as mock_add:
         asyncio.run(download_chat_task(mock.MagicMock(), 123, chat_cfg, node))
 
     mock_add.assert_awaited_once()
@@ -134,9 +140,13 @@ def test_download_chat_task_skips_when_filter_fails():
     async def fake_history(*args, **kwargs):
         yield MockMessage(id=1, media=True, chat_id=123, chat_title="chat")
 
-    with mock.patch("workers.download.get_chat_history_v2", new=fake_history), \
-            mock.patch("workers.download.add_download_task", new=mock.AsyncMock()) as mock_add, \
-            mock.patch("workers.download.app.exec_filter", return_value=False):
+    with mock.patch(
+        "workers.download.get_chat_history_v2", new=fake_history
+    ), mock.patch(
+        "workers.download.add_download_task", new=mock.AsyncMock()
+    ) as mock_add, mock.patch(
+        "workers.download.app.exec_filter", return_value=False
+    ):
         asyncio.run(download_chat_task(mock.MagicMock(), 123, chat_cfg, node))
 
     mock_add.assert_not_awaited()

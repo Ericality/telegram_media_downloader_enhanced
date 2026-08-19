@@ -4,7 +4,12 @@ from unittest import mock
 
 import core.context as ctx
 import media_downloader as md
-from services.notifier import (send_bark_notification, send_bark_notification_sync, send_synology_chat_notification, send_synology_chat_notification_sync)
+from services.notifier import (
+    send_bark_notification,
+    send_bark_notification_sync,
+    send_synology_chat_notification,
+    send_synology_chat_notification_sync,
+)
 
 
 def test_bark_sync_disabled_returns_false():
@@ -32,8 +37,11 @@ def test_bark_sync_success():
     session.__aenter__ = mock.AsyncMock(return_value=session)
     session.__aexit__ = mock.AsyncMock(return_value=False)
 
-    with mock.patch("services.notifier.aiohttp.ClientSession", return_value=session), \
-            mock.patch("services.notifier.aiohttp.ClientTimeout", return_value=mock.MagicMock()):
+    with mock.patch(
+        "services.notifier.aiohttp.ClientSession", return_value=session
+    ), mock.patch(
+        "services.notifier.aiohttp.ClientTimeout", return_value=mock.MagicMock()
+    ):
         ok = asyncio.run(send_bark_notification_sync("title", "body"))
 
     assert ok is True
@@ -88,8 +96,14 @@ def _http_ctx(session):
     from contextlib import ExitStack
 
     stack = ExitStack()
-    stack.enter_context(mock.patch("services.notifier.aiohttp.ClientSession", return_value=session))
-    stack.enter_context(mock.patch("services.notifier.aiohttp.ClientTimeout", return_value=mock.MagicMock()))
+    stack.enter_context(
+        mock.patch("services.notifier.aiohttp.ClientSession", return_value=session)
+    )
+    stack.enter_context(
+        mock.patch(
+            "services.notifier.aiohttp.ClientTimeout", return_value=mock.MagicMock()
+        )
+    )
     return stack
 
 
@@ -104,7 +118,9 @@ def test_bark_sync_client_error_no_retry():
 def test_bark_sync_server_error_retry_then_success():
     md.app.bark_notification = {"enabled": True, "url": "https://api.day.app/key"}
     session = _bark_session([500, 500, 200])
-    with _http_ctx(session), mock.patch("services.notifier.asyncio.sleep", new=mock.AsyncMock()):
+    with _http_ctx(session), mock.patch(
+        "services.notifier.asyncio.sleep", new=mock.AsyncMock()
+    ):
         ok = asyncio.run(send_bark_notification_sync("t", "b"))
     assert ok is True
 
@@ -120,13 +136,17 @@ def test_bark_sync_timeout_returns_false():
     session.post = mock.MagicMock(return_value=resp)
     session.__aenter__ = mock.AsyncMock(return_value=session)
     session.__aexit__ = mock.AsyncMock(return_value=False)
-    with _http_ctx(session), mock.patch("services.notifier.asyncio.sleep", new=mock.AsyncMock()):
+    with _http_ctx(session), mock.patch(
+        "services.notifier.asyncio.sleep", new=mock.AsyncMock()
+    ):
         ok = asyncio.run(send_bark_notification_sync("t", "b"))
     assert ok is False
 
 
 def test_synology_sync_success_json():
-    md.app.notifications = {"synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}}
+    md.app.notifications = {
+        "synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}
+    }
     session = _bark_session([200], text='{"success": true}')
     with _http_ctx(session):
         ok = asyncio.run(send_synology_chat_notification_sync("t", "m"))
@@ -134,7 +154,9 @@ def test_synology_sync_success_json():
 
 
 def test_synology_sync_success_non_json():
-    md.app.notifications = {"synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}}
+    md.app.notifications = {
+        "synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}
+    }
     session = _bark_session([200], text="not json at all")
     with _http_ctx(session):
         ok = asyncio.run(send_synology_chat_notification_sync("t", "m"))
@@ -142,16 +164,22 @@ def test_synology_sync_success_non_json():
 
 
 def test_synology_sync_http_error_returns_false():
-    md.app.notifications = {"synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}}
+    md.app.notifications = {
+        "synology_chat": {"enabled": True, "webhook_url": "https://example.com/webhook"}
+    }
     session = _bark_session([500, 500, 500], text="error")
-    with _http_ctx(session), mock.patch("services.notifier.asyncio.sleep", new=mock.AsyncMock()):
+    with _http_ctx(session), mock.patch(
+        "services.notifier.asyncio.sleep", new=mock.AsyncMock()
+    ):
         ok = asyncio.run(send_synology_chat_notification_sync("t", "m"))
     assert ok is False
 
 
 def test_bark_sync_uses_configured_sound():
     md.app.bark_notification = {
-        "enabled": True, "url": "https://api.day.app/key", "sound": "silence"
+        "enabled": True,
+        "url": "https://api.day.app/key",
+        "sound": "silence",
     }
     session = _bark_session([200])
     with _http_ctx(session):
