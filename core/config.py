@@ -25,7 +25,7 @@ def _check_config() -> bool:
         logger.remove()
 
         # Set log level from config
-        log_level = app.log_level.upper() if hasattr(app, 'log_level') else "INFO"
+        log_level = app.log_level.upper() if hasattr(app, "log_level") else "INFO"
 
         logger.debug(f"设置日志级别为: {log_level}")
 
@@ -36,15 +36,14 @@ def _check_config() -> bool:
             format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
             colorize=True,
             backtrace=False,
-            diagnose=False
+            diagnose=False,
         )
 
         # Archive previous log file on startup
         log_path = os.path.join(app.log_file_path, "tdl.log")
         if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
             archived = os.path.join(
-                app.log_file_path,
-                f"tdl.{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                app.log_file_path, f"tdl.{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
             )
             try:
                 os.rename(log_path, archived)
@@ -59,7 +58,7 @@ def _check_config() -> bool:
             level=log_level,
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
             backtrace=False,
-            diagnose=False
+            diagnose=False,
         )
 
         # Set stdlib logging level
@@ -121,52 +120,66 @@ def print_config_summary(app):
     logger.info("\n通知配置:")
 
     # Check for new-format notifications config
-    if hasattr(app, 'notifications'):
+    if hasattr(app, "notifications"):
         notifications = app.notifications
         logger.info("  [新版配置]")
 
         # Bark config
-        bark_config = notifications.get('bark', {})
+        bark_config = notifications.get("bark", {})
         logger.info(f"  Bark通知:")
         logger.info(f"    启用: {bark_config.get('enabled', False)}")
-        if bark_config.get('enabled', False):
+        if bark_config.get("enabled", False):
             logger.info(f"    URL: {'已设置' if bark_config.get('url') else '未设置'}")
-            logger.info(f"    默认分组: {bark_config.get('default_group', 'TelegramDownloader')}")
+            logger.info(
+                f"    默认分组: {bark_config.get('default_group', 'TelegramDownloader')}"
+            )
             logger.info(f"    默认级别: {bark_config.get('default_level', 'active')}")
-            logger.info(f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB")
+            logger.info(
+                f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB"
+            )
             logger.info(f"    空间检查间隔: {bark_config.get('space_check_interval', 300)}秒")
-            logger.info(f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒")
+            logger.info(
+                f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒"
+            )
             logger.info(f"    通知worker数量: {bark_config.get('notify_worker_count', 1)}")
             logger.info(f"    通知事件列表: {bark_config.get('events_to_notify', [])}")
 
         # Synology Chat config
-        synology_config = notifications.get('synology_chat', {})
+        synology_config = notifications.get("synology_chat", {})
         logger.info(f"  群晖Chat通知:")
         logger.info(f"    启用: {synology_config.get('enabled', False)}")
-        if synology_config.get('enabled', False):
-            logger.info(f"    Webhook URL: {'已设置' if synology_config.get('webhook_url') else '未设置'}")
+        if synology_config.get("enabled", False):
+            logger.info(
+                f"    Webhook URL: {'已设置' if synology_config.get('webhook_url') else '未设置'}"
+            )
             logger.info(f"    机器人名称: {synology_config.get('bot_name', 'Telegram下载器')}")
             logger.info(f"    默认级别: {synology_config.get('default_level', 'info')}")
             logger.info(f"    通知事件列表: {synology_config.get('events_to_notify', [])}")
 
         # Global config
-        global_config = notifications.get('global', {})
+        global_config = notifications.get("global", {})
         logger.info(f"  全局配置:")
-        logger.info(f"    统计通知间隔: {global_config.get('stats_notification_interval', 3600)}秒")
+        logger.info(
+            f"    统计通知间隔: {global_config.get('stats_notification_interval', 3600)}秒"
+        )
         logger.info(f"    队列监控间隔: {global_config.get('queue_monitor_interval', 300)}秒")
         logger.info(f"    最大重试次数: {global_config.get('max_notification_retries', 3)}")
 
     # Also check legacy config (backward compat)
-    elif hasattr(app, 'bark_notification'):
+    elif hasattr(app, "bark_notification"):
         bark_config = app.bark_notification
         logger.info("  [旧版配置]")
         logger.info(f"  Bark通知:")
         logger.info(f"    启用: {bark_config.get('enabled', False)}")
-        if bark_config.get('enabled', False):
+        if bark_config.get("enabled", False):
             logger.info(f"    URL: {'已设置' if bark_config.get('url') else '未设置'}")
-            logger.info(f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB")
+            logger.info(
+                f"    磁盘空间阈值: {bark_config.get('disk_space_threshold_gb', 10.0)}GB"
+            )
             logger.info(f"    空间检查间隔: {bark_config.get('space_check_interval', 300)}秒")
-            logger.info(f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒")
+            logger.info(
+                f"    统计通知间隔: {bark_config.get('stats_notification_interval', 3600)}秒"
+            )
             logger.info(f"    通知worker数量: {bark_config.get('notify_worker_count', 1)}")
             logger.info(f"    通知事件列表: {bark_config.get('events_to_notify', [])}")
     else:
@@ -188,7 +201,9 @@ def print_config_summary(app):
     # Language and permissions
     logger.info("\n语言和权限:")
     logger.info(f"  语言: {app.language}")
-    logger.info(f"  允许的用户ID: {len(app.allowed_user_ids) if app.allowed_user_ids else 0}个")
+    logger.info(
+        f"  允许的用户ID: {len(app.allowed_user_ids) if app.allowed_user_ids else 0}个"
+    )
     if app.allowed_user_ids and len(app.allowed_user_ids) <= 10:
         logger.info(f"    具体ID: {list(app.allowed_user_ids)}")
 
@@ -201,7 +216,8 @@ def print_config_summary(app):
         logger.info(f"    最后读取消息ID: {config.last_read_message_id}")
         logger.info(f"    待重试消息数: {len(config.ids_to_retry)}")
         logger.info(
-            f"    过滤器: {config.download_filter[:50] + '...' if config.download_filter and len(config.download_filter) > 50 else config.download_filter}")
+            f"    过滤器: {config.download_filter[:50] + '...' if config.download_filter and len(config.download_filter) > 50 else config.download_filter}"
+        )
         logger.info(f"    上传Telegram聊天ID: {config.upload_telegram_chat_id}")
 
     # Cloud drive config
@@ -219,7 +235,8 @@ def print_config_summary(app):
     logger.info(f"  程序重启标志: {app.restart_program}")
     logger.info(f"  上传Telegram后删除: {app.after_upload_telegram_delete}")
     logger.info(
-        f"  转发限制: {app.forward_limit_call.max_limit_call_times if hasattr(app, 'forward_limit_call') else '未设置'}")
+        f"  转发限制: {app.forward_limit_call.max_limit_call_times if hasattr(app, 'forward_limit_call') else '未设置'}"
+    )
 
     logger.info("=" * 60)
 
@@ -250,18 +267,18 @@ def check_config_consistency(app):
         issues.append("聊天配置为空")
 
     # Check notification config
-    notifications_config = getattr(app, 'notifications', {})
+    notifications_config = getattr(app, "notifications", {})
 
     # Check Bark config
-    bark_config = notifications_config.get('bark', {})
-    if bark_config.get('enabled', False):
-        if not bark_config.get('url'):
+    bark_config = notifications_config.get("bark", {})
+    if bark_config.get("enabled", False):
+        if not bark_config.get("url"):
             issues.append("Bark通知已启用但URL未设置")
 
     # Check Synology Chat config
-    synology_config = notifications_config.get('synology_chat', {})
-    if synology_config.get('enabled', False):
-        if not synology_config.get('webhook_url'):
+    synology_config = notifications_config.get("synology_chat", {})
+    if synology_config.get("enabled", False):
+        if not synology_config.get("webhook_url"):
             issues.append("群晖Chat通知已启用但Webhook URL未设置")
 
     return issues

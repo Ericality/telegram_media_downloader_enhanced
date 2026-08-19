@@ -30,7 +30,7 @@ class DiskSpaceMonitor:
             "tasks_completed": 0,
             "tasks_failed": 0,
             "tasks_skipped": 0,
-            "download_size": 0
+            "download_size": 0,
         }
 
 
@@ -40,13 +40,15 @@ disk_monitor = DiskSpaceMonitor()
 async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
     """Check available disk space in GB."""
     try:
-        download_path = app.download_path if hasattr(app, 'download_path') else "/app/downloads"
+        download_path = (
+            app.download_path if hasattr(app, "download_path") else "/app/downloads"
+        )
         if not os.path.exists(download_path):
             download_path = "/"
 
         disk_usage = psutil.disk_usage(download_path)
-        available_gb = disk_usage.free / (1024 ** 3)
-        total_gb = disk_usage.total / (1024 ** 3)
+        available_gb = disk_usage.free / (1024**3)
+        total_gb = disk_usage.total / (1024**3)
         threshold_gb = float(threshold_gb)
         has_enough_space = available_gb >= threshold_gb
 
@@ -59,19 +61,27 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
 async def disk_space_monitor_task():
     """Disk space monitor task."""
     # Check if notification system is enabled
-    if not (notification_manager.bark_enabled or notification_manager.synology_chat_enabled):
+    if not (
+        notification_manager.bark_enabled or notification_manager.synology_chat_enabled
+    ):
         logger.info("通知系统未启用，跳过磁盘空间监控任务")
         return
 
     # Get disk space thresholds
-    bark_threshold = notification_manager.bark_config.get('disk_space_threshold_gb', 10.0)
-    synology_threshold = notification_manager.synology_chat_config.get('disk_space_threshold_gb', 10.0)
+    bark_threshold = notification_manager.bark_config.get(
+        "disk_space_threshold_gb", 10.0
+    )
+    synology_threshold = notification_manager.synology_chat_config.get(
+        "disk_space_threshold_gb", 10.0
+    )
     # Use the smaller threshold
     threshold_gb = min(bark_threshold, synology_threshold)
 
     # Get check intervals
-    bark_interval = notification_manager.bark_config.get('space_check_interval', 300)
-    synology_interval = notification_manager.synology_chat_config.get('space_check_interval', 300)
+    bark_interval = notification_manager.bark_config.get("space_check_interval", 300)
+    synology_interval = notification_manager.synology_chat_config.get(
+        "space_check_interval", 300
+    )
     # Use the smaller interval
     check_interval = min(bark_interval, synology_interval)
 
@@ -80,19 +90,23 @@ async def disk_space_monitor_task():
     # Run one check immediately on startup
     try:
         has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
-        await notification_manager.send_disk_space_notification(has_space, available_gb, total_gb, threshold_gb)
+        await notification_manager.send_disk_space_notification(
+            has_space, available_gb, total_gb, threshold_gb
+        )
     except Exception as e:
         logger.error(f"启动时磁盘空间检查失败: {e}")
 
     # Start periodic checks
     while True:
         # Check exit signal
-        if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+        if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
             logger.info("磁盘空间监控任务收到退出信号，准备退出")
             break
 
         try:
-            await asyncio.sleep(min(check_interval, 5))  # Cap at 5s for fast exit response
+            await asyncio.sleep(
+                min(check_interval, 5)
+            )  # Cap at 5s for fast exit response
 
             has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
             current_time = time.time()
@@ -100,12 +114,20 @@ async def disk_space_monitor_task():
 
             if not has_space:
                 disk_monitor.space_low = True
-                if (current_time - disk_monitor.last_notification_time) > notification_cooldown:
+                if (
+                    current_time - disk_monitor.last_notification_time
+                ) > notification_cooldown:
                     # Query cloud storage space for diagnostics
                     cloud_msg = ""
-                    if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
+                    if (
+                        app.cloud_drive_config.enable_upload_file
+                        and app.cloud_drive_config.upload_adapter == "rclone"
+                    ):
                         from module.cloud_drive import get_cloud_storage_used
-                        cloud_about = await get_cloud_storage_used(app.cloud_drive_config)
+
+                        cloud_about = await get_cloud_storage_used(
+                            app.cloud_drive_config
+                        )
                         if cloud_about:
                             cloud_msg = f"\n云端存储: {cloud_about.replace(chr(10), ' | ')}"
                     await notification_manager.send_disk_space_notification(
@@ -151,14 +173,18 @@ async def stats_notification_task():
         logger.error(f"启动测试统计通知发送失败: {e}")
 
     # Get notification intervals
-    bark_interval = notification_manager.bark_config.get('stats_notification_interval', 3600)
-    global_interval = notification_manager.global_config.get('stats_notification_interval', 3600)
+    bark_interval = notification_manager.bark_config.get(
+        "stats_notification_interval", 3600
+    )
+    global_interval = notification_manager.global_config.get(
+        "stats_notification_interval", 3600
+    )
     # Use the shorter interval
     interval = min(bark_interval, global_interval)
 
     logger.info(f"统计通知任务将每 {interval} 秒执行一次")
 
-    while getattr(app, 'is_running', True):
+    while getattr(app, "is_running", True):
         try:
             await asyncio.sleep(interval)
 
@@ -174,7 +200,7 @@ async def stats_notification_task():
                 "tasks_completed": 0,
                 "tasks_failed": 0,
                 "tasks_skipped": 0,
-                "download_size": 0
+                "download_size": 0,
             }
         except Exception as e:
             logger.error(f"统计通知任务出错: {e}")
@@ -194,9 +220,11 @@ async def queue_monitor_task():
     logger.info("队列监控任务已启动")
 
     # Get monitor interval
-    global_interval = notification_manager.global_config.get('queue_monitor_interval', 300)
+    global_interval = notification_manager.global_config.get(
+        "queue_monitor_interval", 300
+    )
 
-    while getattr(app, 'is_running', True):
+    while getattr(app, "is_running", True):
         try:
             await asyncio.sleep(global_interval)
 
@@ -207,11 +235,16 @@ async def queue_monitor_task():
             # Send status report if queue usage exceeds 80%
             if usage_percent > 0.8 and queue_status_enabled:
                 # Get actual active worker count
-                active_workers = queue_manager.max_download_tasks - len(disk_monitor.paused_workers)
+                active_workers = queue_manager.max_download_tasks - len(
+                    disk_monitor.paused_workers
+                )
 
                 # Get currently downloading task count from download_result (consistent with Web UI)
                 from module.download_stat import get_download_result
-                downloading_count = sum(len(msgs) for msgs in get_download_result().values())
+
+                downloading_count = sum(
+                    len(msgs) for msgs in get_download_result().values()
+                )
 
                 # Queued task count
                 queued_count = ctx.download_queue.qsize()
@@ -226,7 +259,9 @@ async def queue_monitor_task():
                     f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
 
-                await notification_manager.send_event_notification("queue_status", "队列状态", message, "info")
+                await notification_manager.send_event_notification(
+                    "queue_status", "队列状态", message, "info"
+                )
 
         except Exception as e:
             logger.error(f"队列监控任务出错: {e}")

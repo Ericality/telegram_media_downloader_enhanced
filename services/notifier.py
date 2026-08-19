@@ -25,61 +25,69 @@ class NotificationManager:
 
     def _notifications(self) -> dict:
         """Read notifications config live from the unified app config store."""
-        return app.get_config('notifications', {})
+        return app.get_config("notifications", {})
 
     @property
     def bark_config(self) -> dict:
         """Bark notification config (live, no cached copy)."""
-        return self._notifications().get('bark', {})
+        return self._notifications().get("bark", {})
 
     @property
     def synology_chat_config(self) -> dict:
         """Synology Chat config (live, no cached copy)."""
-        return self._notifications().get('synology_chat', {})
+        return self._notifications().get("synology_chat", {})
 
     @property
     def global_config(self) -> dict:
         """Global notification config (live, no cached copy)."""
-        return self._notifications().get('global', {})
+        return self._notifications().get("global", {})
 
     def load_config(self):
         """Load notification config from app settings."""
-        self.bark_enabled = self.bark_config.get('enabled', False)
-        self.synology_chat_enabled = self.synology_chat_config.get('enabled', False)
-        logger.info(f"通知管理器加载: Bark={self.bark_enabled}, 群晖Chat={self.synology_chat_enabled}")
+        self.bark_enabled = self.bark_config.get("enabled", False)
+        self.synology_chat_enabled = self.synology_chat_config.get("enabled", False)
+        logger.info(
+            f"通知管理器加载: Bark={self.bark_enabled}, 群晖Chat={self.synology_chat_enabled}"
+        )
 
     def should_notify(self, event_type: str, notification_type: str = None) -> bool:
         """Check whether a notification type should be sent for a given event."""
-        if notification_type == 'bark':
+        if notification_type == "bark":
             if not self.bark_enabled:
                 return False
-            events_to_notify = self.bark_config.get('events_to_notify', [])
+            events_to_notify = self.bark_config.get("events_to_notify", [])
             return event_type in events_to_notify
 
-        elif notification_type == 'synology_chat':
+        elif notification_type == "synology_chat":
             if not self.synology_chat_enabled:
                 return False
-            events_to_notify = self.synology_chat_config.get('events_to_notify', [])
+            events_to_notify = self.synology_chat_config.get("events_to_notify", [])
             return event_type in events_to_notify
 
         # If no specific type, check if any notification channel should send
-        bark_should = self.should_notify(event_type, 'bark')
-        synology_should = self.should_notify(event_type, 'synology_chat')
+        bark_should = self.should_notify(event_type, "bark")
+        synology_should = self.should_notify(event_type, "synology_chat")
         return bark_should or synology_should
 
-    async def send_event_notification(self, event_type: str, title: str, body: str,
-                                      level: str = None, custom_config: dict = None):
+    async def send_event_notification(
+        self,
+        event_type: str,
+        title: str,
+        body: str,
+        level: str = None,
+        custom_config: dict = None,
+    ):
         """Send event notification via all enabled channels."""
         tasks = []
 
         # Send Bark notification
-        if self.should_notify(event_type, 'bark'):
-            bark_group = self.bark_config.get('default_group')
-            bark_level = level or self.bark_config.get('default_level')
+        if self.should_notify(event_type, "bark"):
+            bark_group = self.bark_config.get("default_group")
+            bark_level = level or self.bark_config.get("default_level")
 
-            if custom_config and custom_config.get('bark'):
-                bark_group = custom_config['bark'].get('group', bark_group)
-                bark_level = custom_config['bark'].get('level', bark_level)
+            if custom_config and custom_config.get("bark"):
+                bark_group = custom_config["bark"].get("group", bark_group)
+                bark_level = custom_config["bark"].get("level", bark_level)
 
             task = asyncio.create_task(
                 send_bark_notification(title, body, group=bark_group, level=bark_level)
@@ -87,11 +95,15 @@ class NotificationManager:
             tasks.append(task)
 
         # Send Synology Chat notification
-        if self.should_notify(event_type, 'synology_chat'):
-            synology_level = level or self.synology_chat_config.get('default_level', 'info')
+        if self.should_notify(event_type, "synology_chat"):
+            synology_level = level or self.synology_chat_config.get(
+                "default_level", "info"
+            )
 
-            if custom_config and custom_config.get('synology_chat'):
-                synology_level = custom_config['synology_chat'].get('level', synology_level)
+            if custom_config and custom_config.get("synology_chat"):
+                synology_level = custom_config["synology_chat"].get(
+                    "level", synology_level
+                )
 
             task = asyncio.create_task(
                 send_synology_chat_notification(title, body, level=synology_level)
@@ -101,7 +113,9 @@ class NotificationManager:
         # Wait for all notifications to complete
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            success_count = sum(1 for r in results if r is True and not isinstance(r, Exception))
+            success_count = sum(
+                1 for r in results if r is True and not isinstance(r, Exception)
+            )
 
             if success_count == 0:
                 logger.warning(f"事件 {event_type} 的所有通知发送失败")
@@ -112,9 +126,14 @@ class NotificationManager:
 
         return False
 
-    async def send_disk_space_notification(self, has_space: bool, available_gb: float,
-                                           total_gb: float, threshold_gb: float,
-                                           cloud_extra: str = ""):
+    async def send_disk_space_notification(
+        self,
+        has_space: bool,
+        available_gb: float,
+        total_gb: float,
+        threshold_gb: float,
+        cloud_extra: str = "",
+    ):
         """Send disk space notification, optionally with cloud storage info."""
         if has_space:
             title = "磁盘空间充足"
@@ -129,8 +148,9 @@ class NotificationManager:
 
         return await self.send_event_notification("disk_space", title, message, level)
 
-    async def send_queue_notification(self, current_size: int, capacity: int,
-                                      wait_time_minutes: int = None):
+    async def send_queue_notification(
+        self, current_size: int, capacity: int, wait_time_minutes: int = None
+    ):
         """Send queue status notification."""
         usage_percent = int(current_size / capacity * 100) if capacity > 0 else 0
 
@@ -153,7 +173,9 @@ class NotificationManager:
         from workers.monitor import disk_monitor
 
         title = "下载统计"
-        storage_line = stats.get('storage_summary', '') or await get_storage_summary_text()
+        storage_line = (
+            stats.get("storage_summary", "") or await get_storage_summary_text()
+        )
         retried = disk_monitor.retry_success_count
         retry_info = f"\n重试成功: {retried}" if retried > 0 else ""
         message = (
@@ -171,7 +193,9 @@ class NotificationManager:
         if storage_line:
             message += f"\n💾 {storage_line}"
 
-        return await self.send_event_notification("stats_summary", title, message, "info")
+        return await self.send_event_notification(
+            "stats_summary", title, message, "info"
+        )
 
     async def send_test_notification(self):
         """Send test notification."""
@@ -185,53 +209,52 @@ class NotificationManager:
 
         synology_success = False
         if self.synology_chat_enabled:
-            synology_success = await send_synology_chat_notification(test_title, test_message)
+            synology_success = await send_synology_chat_notification(
+                test_title, test_message
+            )
             logger.info(f"群晖Chat测试通知: {'成功' if synology_success else '失败'}")
 
-        return {
-            "bark": bark_success,
-            "synology_chat": synology_success
-        }
+        return {"bark": bark_success, "synology_chat": synology_success}
 
 
 notification_manager = NotificationManager()
 
 
 async def send_bark_notification_sync(
-        title: str,
-        body: str,
-        url: str = None,
-        group: str = None,
-        level: str = None,
-        max_retries: int = 2
+    title: str,
+    body: str,
+    url: str = None,
+    group: str = None,
+    level: str = None,
+    max_retries: int = 2,
 ):
     """Send Bark notification synchronously with retry and group/level support."""
     if not url:
-        bark_config = app.get_config('bark_notification', {})
-        if not bark_config.get('enabled', False):
+        bark_config = app.get_config("bark_notification", {})
+        if not bark_config.get("enabled", False):
             return False
-        url = bark_config.get('url', '')
+        url = bark_config.get("url", "")
 
     if not url:
         logger.warning("Bark通知URL未设置")
         return False
 
     # Ensure URL has scheme
-    if not url.startswith('http'):
+    if not url.startswith("http"):
         url = f"https://{url}"
 
     # Get default group, level and sound from config
-    bark_config = app.get_config('bark_notification', {})
-    default_group = bark_config.get('default_group', 'TelegramDownloader')
-    default_level = bark_config.get('default_level', 'active')
-    sound = bark_config.get('sound', 'alarm')
+    bark_config = app.get_config("bark_notification", {})
+    default_group = bark_config.get("default_group", "TelegramDownloader")
+    default_level = bark_config.get("default_level", "active")
+    sound = bark_config.get("sound", "alarm")
 
     # Build payload
     payload = {
         "title": title[:100],  # Limit title length
         "body": body[:500],  # Limit body length
         "sound": sound,
-        "icon": "https://telegram.org/img/t_logo.png"
+        "icon": "https://telegram.org/img/t_logo.png",
     }
 
     # Add group param (use provided or default)
@@ -254,11 +277,14 @@ async def send_bark_notification_sync(
                 async with session.post(url, json=payload, timeout=timeout) as response:
                     if response.status == 200:
                         logger.debug(
-                            f"Bark通知发送成功: {title}, group={payload.get('group')}, level={payload.get('level')}")
+                            f"Bark通知发送成功: {title}, group={payload.get('group')}, level={payload.get('level')}"
+                        )
                         return True
                     else:
                         response_text = await response.text()
-                        logger.warning(f"Bark通知发送失败: HTTP {response.status}, 响应: {response_text[:100]}")
+                        logger.warning(
+                            f"Bark通知发送失败: HTTP {response.status}, 响应: {response_text[:100]}"
+                        )
 
                         # Client error (4xx): do not retry
                         if 400 <= response.status < 500:
@@ -266,17 +292,19 @@ async def send_bark_notification_sync(
 
                         # Server error (5xx): retry with backoff
                         if retry < max_retries:
-                            wait_time = 2 ** retry  # Exponential backoff
-                            logger.info(f"等待 {wait_time} 秒后重试 ({retry + 1}/{max_retries})...")
+                            wait_time = 2**retry  # Exponential backoff
+                            logger.info(
+                                f"等待 {wait_time} 秒后重试 ({retry + 1}/{max_retries})..."
+                            )
                             await asyncio.sleep(wait_time)
         except asyncio.TimeoutError:
             logger.warning(f"Bark通知超时 ({retry + 1}/{max_retries + 1})")
             if retry < max_retries:
-                await asyncio.sleep(2 ** retry)
+                await asyncio.sleep(2**retry)
         except aiohttp.ClientError as e:
             logger.warning(f"Bark通知网络错误: {e} ({retry + 1}/{max_retries + 1})")
             if retry < max_retries:
-                await asyncio.sleep(2 ** retry)
+                await asyncio.sleep(2**retry)
         except Exception as e:
             logger.error(f"发送Bark通知时出错: {e}")
             return False
@@ -285,28 +313,26 @@ async def send_bark_notification_sync(
 
 
 async def send_bark_notification(
-        title: str,
-        body: str,
-        url: str = None,
-        group: str = None,
-        level: str = None
+    title: str, body: str, url: str = None, group: str = None, level: str = None
 ):
     """Enqueue Bark notification with timestamp."""
     try:
         # Add creation timestamp
-        create_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        create_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Put notification task into queue
-        await ctx.notify_queue.put({
-            'type': 'bark_notification',
-            'title': title,
-            'body': body,
-            'url': url,
-            'group': group,
-            'level': level,
-            'create_time': create_time,  # Creation time
-            'queue_time': time.time()  # Queue entry timestamp (Unix)
-        })
+        await ctx.notify_queue.put(
+            {
+                "type": "bark_notification",
+                "title": title,
+                "body": body,
+                "url": url,
+                "group": group,
+                "level": level,
+                "create_time": create_time,  # Creation time
+                "queue_time": time.time(),  # Queue entry timestamp (Unix)
+            }
+        )
         logger.debug(f"已添加通知任务到队列: {title}, 创建时间={create_time}")
         return True
     except asyncio.QueueFull:
@@ -318,27 +344,27 @@ async def send_bark_notification(
 
 
 async def send_synology_chat_notification_sync(
-        title: str,
-        message: str,
-        level: str = "info",
-        webhook_url: str = None,
-        bot_name: str = None,
-        bot_avatar: str = None,
-        mention_users: list = None,
-        mention_channels: list = None,
-        max_retries: int = 2
+    title: str,
+    message: str,
+    level: str = "info",
+    webhook_url: str = None,
+    bot_name: str = None,
+    bot_avatar: str = None,
+    mention_users: list = None,
+    mention_channels: list = None,
+    max_retries: int = 2,
 ) -> bool:
     """Send Synology Chat notification synchronously (url-encoded format)."""
     # Get config
-    notifications_config = app.get_config('notifications', {})
-    synology_config = notifications_config.get('synology_chat', {})
+    notifications_config = app.get_config("notifications", {})
+    synology_config = notifications_config.get("synology_chat", {})
 
-    if not synology_config.get('enabled', False):
+    if not synology_config.get("enabled", False):
         logger.debug("群晖 Chat Bot 未启用")
         return False
 
     if not webhook_url:
-        webhook_url = synology_config.get('webhook_url', '')
+        webhook_url = synology_config.get("webhook_url", "")
 
     if not webhook_url:
         logger.warning("群晖 Chat Bot Webhook URL 未设置")
@@ -361,7 +387,7 @@ async def send_synology_chat_notification_sync(
         "info": {"emoji": "ℹ️"},
         "warning": {"emoji": "⚠️"},
         "error": {"emoji": "❌"},
-        "success": {"emoji": "✅"}
+        "success": {"emoji": "✅"},
     }
 
     level_info = level_config.get(level.lower(), level_config["info"])
@@ -400,11 +426,15 @@ async def send_synology_chat_notification_sync(
             timeout = aiohttp.ClientTimeout(total=15)
             headers = {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json"
+                "Accept": "application/json",
             }
 
-            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-                async with session.post(webhook_url, data=data, timeout=timeout) as response:
+            async with aiohttp.ClientSession(
+                timeout=timeout, headers=headers
+            ) as session:
+                async with session.post(
+                    webhook_url, data=data, timeout=timeout
+                ) as response:
                     response_text = await response.text()
 
                     if response.status in [200, 201, 204]:
@@ -414,40 +444,50 @@ async def send_synology_chat_notification_sync(
                                 logger.info(f"群晖 Chat 通知发送成功: {title}")
                                 return True
                             else:
-                                error_msg = response_json.get("error", {}).get("errors", "未知错误")
+                                error_msg = response_json.get("error", {}).get(
+                                    "errors", "未知错误"
+                                )
                                 logger.warning(f"群晖 Chat 通知返回失败: {error_msg}")
                         except json.JSONDecodeError:
-                            logger.info(f"群晖 Chat 通知发送成功，但响应不是JSON: {response_text[:100]}")
+                            logger.info(
+                                f"群晖 Chat 通知发送成功，但响应不是JSON: {response_text[:100]}"
+                            )
                             return True
                         except Exception as e:
-                            logger.warning(f"解析群晖 Chat 响应时出错: {e}, 响应: {response_text[:100]}")
+                            logger.warning(
+                                f"解析群晖 Chat 响应时出错: {e}, 响应: {response_text[:100]}"
+                            )
                             return True
                     else:
                         logger.warning(f"群晖 Chat 通知发送失败: HTTP {response.status}")
 
                         try:
                             error_json = json.loads(response_text)
-                            error_msg = error_json.get("error", {}).get("errors", response_text[:200])
+                            error_msg = error_json.get("error", {}).get(
+                                "errors", response_text[:200]
+                            )
                             logger.debug(f"错误详情: {error_msg}")
                         except:
                             logger.debug(f"响应内容: {response_text[:200]}")
 
                         if retry < max_retries:
-                            wait_time = 2 ** retry
-                            logger.info(f"等待 {wait_time} 秒后重试 ({retry + 1}/{max_retries})...")
+                            wait_time = 2**retry
+                            logger.info(
+                                f"等待 {wait_time} 秒后重试 ({retry + 1}/{max_retries})..."
+                            )
                             await asyncio.sleep(wait_time)
                         else:
                             return False
         except asyncio.TimeoutError:
             logger.warning(f"群晖 Chat 通知超时 ({retry + 1}/{max_retries + 1})")
             if retry < max_retries:
-                await asyncio.sleep(2 ** retry)
+                await asyncio.sleep(2**retry)
             else:
                 break
         except aiohttp.ClientError as e:
             logger.warning(f"群晖 Chat 通知网络错误: {e} ({retry + 1}/{max_retries + 1})")
             if retry < max_retries:
-                await asyncio.sleep(2 ** retry)
+                await asyncio.sleep(2**retry)
             else:
                 break
         except Exception as e:
@@ -459,32 +499,34 @@ async def send_synology_chat_notification_sync(
 
 
 async def send_synology_chat_notification(
-        title: str,
-        message: str,
-        level: str = "info",
-        webhook_url: str = None,
-        bot_name: str = None,
-        bot_avatar: str = None,
-        mention_users: list = None,
-        mention_channels: list = None
+    title: str,
+    message: str,
+    level: str = "info",
+    webhook_url: str = None,
+    bot_name: str = None,
+    bot_avatar: str = None,
+    mention_users: list = None,
+    mention_channels: list = None,
 ) -> bool:
     """Enqueue Synology Chat notification with timestamp."""
     try:
-        create_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        create_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        await ctx.notify_queue.put({
-            'type': 'synology_chat_notification',
-            'title': title,
-            'message': message,
-            'level': level,
-            'webhook_url': webhook_url,
-            'bot_name': bot_name,
-            'bot_avatar': bot_avatar,
-            'mention_users': mention_users,
-            'mention_channels': mention_channels,
-            'create_time': create_time,  # Creation time
-            'queue_time': time.time()  # Queue entry timestamp
-        })
+        await ctx.notify_queue.put(
+            {
+                "type": "synology_chat_notification",
+                "title": title,
+                "message": message,
+                "level": level,
+                "webhook_url": webhook_url,
+                "bot_name": bot_name,
+                "bot_avatar": bot_avatar,
+                "mention_users": mention_users,
+                "mention_channels": mention_channels,
+                "create_time": create_time,  # Creation time
+                "queue_time": time.time(),  # Queue entry timestamp
+            }
+        )
         logger.debug(f"已添加群晖 Chat 通知任务到队列: {title}, 创建时间={create_time}")
         return True
     except asyncio.QueueFull:

@@ -23,7 +23,12 @@ from module.app import (
     TaskType,
     UploadStatus,
 )
-from module.download_stat import get_download_result, get_total_download_speed, get_download_state, DownloadState
+from module.download_stat import (
+    DownloadState,
+    get_download_result,
+    get_download_state,
+    get_total_download_speed,
+)
 from module.filter import Filter
 from module.get_chat_history_v2 import get_chat_history_v2
 from module.language import Language, _t
@@ -1262,7 +1267,7 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
         node = chat_config.node
         if node:
             config_total += node.total_task
-            config_finished += node.finish_task if hasattr(node, 'finish_task') else 0
+            config_finished += node.finish_task if hasattr(node, "finish_task") else 0
             if node.is_running and not node.is_finish():
                 config_active += 1
 
@@ -1271,16 +1276,24 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     msg_lines.append("📋 **Task Overview:**")
 
     if config_total > 0:
-        msg_lines.append(f"  📥 Config download: {config_finished}/{config_total} completed, {active_downloading} downloading")
+        msg_lines.append(
+            f"  📥 Config download: {config_finished}/{config_total} completed, {active_downloading} downloading"
+        )
     if bot_active:
-        msg_lines.append(f"  🤖 Bot-commanded tasks: {len(bot_active)} active / {len(bot_finished)} finished")
+        msg_lines.append(
+            f"  🤖 Bot-commanded tasks: {len(bot_active)} active / {len(bot_finished)} finished"
+        )
     if config_total == 0 and not bot_active:
         msg_lines.append(f"  ⏳ No active tasks")
 
     if bot_active:
         for task_id, node in bot_active[:10]:
             task_type = node.task_type.name if node.task_type else "Download"
-            chat_title = node.replay_message[:30] if node.replay_message else f"chat {node.chat_id}"
+            chat_title = (
+                node.replay_message[:30]
+                if node.replay_message
+                else f"chat {node.chat_id}"
+            )
             msg_lines.append(f"     • Task #{task_id} [{task_type}] {chat_title}")
 
     # --- Config overview ---
@@ -1288,17 +1301,20 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     msg_lines.append("━━━━━━━━━━━━━━━━━━━━━")
     msg_lines.append("⚙️ **Config Overview:**")
 
-    if hasattr(_bot.app, 'chat_download_config'):
+    if hasattr(_bot.app, "chat_download_config"):
         chat_count = len(_bot.app.chat_download_config)
         msg_lines.append(f"  📡 Monitored chats: {chat_count}")
 
     msg_lines.append(f"  🏷️  Media types: {', '.join(_bot.app.media_types)}")
-    if hasattr(_bot.app, 'upload_drive') and _bot.app.upload_drive.get('enable_upload_file'):
+    if hasattr(_bot.app, "upload_drive") and _bot.app.upload_drive.get(
+        "enable_upload_file"
+    ):
         msg_lines.append(f"  ☁️  Cloud upload: Enabled")
 
     retry_ok = 0
     try:
         from workers.monitor import disk_monitor
+
         retry_ok = disk_monitor.retry_success_count
     except:
         pass
@@ -1308,6 +1324,7 @@ async def status_command(client: pyrogram.Client, message: pyrogram.types.Messag
     # Storage summary
     try:
         from services.stats import get_storage_summary_text
+
         storage = await get_storage_summary_text()
         if storage:
             msg_lines.append("")

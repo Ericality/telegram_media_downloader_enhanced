@@ -1,5 +1,6 @@
 """web ui for media download"""
 
+import json
 import logging
 import os
 import threading
@@ -7,7 +8,6 @@ import threading
 from flask import Flask, jsonify, render_template, request
 from flask_login import LoginManager, UserMixin, login_required, login_user
 
-import json
 import utils
 from module.app import Application
 from module.download_stat import (
@@ -179,16 +179,13 @@ def get_storage_status():
     import psutil
     from loguru import logger
 
-    result = {
-        "local_used_pct": 0,
-        "cloud_used_pct": 0,
-        "cloud_ok": False
-    }
+    result = {"local_used_pct": 0, "cloud_used_pct": 0, "cloud_ok": False}
 
     # Local disk
     try:
         from core.context import app as main_app
-        download_path = getattr(main_app, 'download_path', None) or "/app/downloads"
+
+        download_path = getattr(main_app, "download_path", None) or "/app/downloads"
         if not os.path.exists(download_path):
             download_path = "/"
         usage = psutil.disk_usage(download_path)
@@ -200,14 +197,23 @@ def get_storage_status():
     try:
         from core.context import app as main_app
         from module.cloud_drive import CloudDriveConfig
+
         cfg = main_app.cloud_drive_config
         if cfg and cfg.enable_upload_file and cfg.upload_adapter == "rclone":
-            import subprocess, re
+            import re
+            import subprocess
+
             root = cfg.remote_dir.split(":")[0] + ":"
             proc = subprocess.run(
                 [cfg.rclone_path, "about", f"{root}/", "--json"],
-                capture_output=True, text=True, timeout=30,
-                env={**os.environ, "HOME": "/app", "RCLONE_CONFIG": "/etc/rclone/rclone.conf"}
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env={
+                    **os.environ,
+                    "HOME": "/app",
+                    "RCLONE_CONFIG": "/etc/rclone/rclone.conf",
+                },
             )
             if proc.returncode == 0 and proc.stdout.strip():
                 data = json.loads(proc.stdout)
@@ -232,9 +238,11 @@ def get_app_version():
 @login_required
 def get_download_list():
     """Return active download task list (excluding failed tasks)"""
-    import os
     import json
+    import os
+
     from loguru import logger
+
     from module.download_stat import get_download_result
     from utils.format import format_byte
 
@@ -248,9 +256,10 @@ def get_download_list():
     try:
         # Try to get path from global app instance
         from core.context import app
+
         failed_tasks_file = os.path.join(app.session_file_path, "failed_tasks.json")
         if os.path.exists(failed_tasks_file):
-            with open(failed_tasks_file, 'r', encoding='utf-8') as f:
+            with open(failed_tasks_file, "r", encoding="utf-8") as f:
                 all_failed = json.load(f)
                 for chat_key, tasks in all_failed.items():
                     for task in tasks:
@@ -264,7 +273,7 @@ def get_download_list():
         for msg_id, info in messages.items():
             total_size = info["total_size"]
             down_byte = info["down_byte"]
-            is_completed = (down_byte == total_size)
+            is_completed = down_byte == total_size
 
             # Filter by completion status based on query parameter
             if already_down and not is_completed:
@@ -281,15 +290,18 @@ def get_download_list():
             # Build single task JSON entry
             download_speed = format_byte(info["download_speed"]) + "/s"
             progress = round(down_byte / total_size * 100, 1) if total_size > 0 else 0
-            task_json = json.dumps({
-                "chat": f"{chat_id}",
-                "id": f"{msg_id}",
-                "filename": os.path.basename(info["file_name"]),
-                "total_size": format_byte(total_size),
-                "download_progress": f"{progress}",
-                "download_speed": download_speed,
-                "save_path": info["file_name"].replace("\\", "/"),
-            }, ensure_ascii=False)
+            task_json = json.dumps(
+                {
+                    "chat": f"{chat_id}",
+                    "id": f"{msg_id}",
+                    "filename": os.path.basename(info["file_name"]),
+                    "total_size": format_byte(total_size),
+                    "download_progress": f"{progress}",
+                    "download_speed": download_speed,
+                    "save_path": info["file_name"].replace("\\", "/"),
+                },
+                ensure_ascii=False,
+            )
             result_parts.append(task_json)
 
     result = "[" + ",".join(result_parts) + "]"
