@@ -30,7 +30,7 @@ from workers.monitor import disk_monitor
 
 
 async def save_msg_to_file(
-        app, chat_id: Union[int, str], message: pyrogram.types.Message
+    app, chat_id: Union[int, str], message: pyrogram.types.Message
 ):
     """Save message text or caption to a .txt file."""
     dirname = validate_title(
@@ -48,6 +48,7 @@ async def save_msg_to_file(
     os.makedirs(os.path.dirname(file_name), exist_ok=True)
 
     from workers.download import _is_exist
+
     if _is_exist(file_name):
         return DownloadStatus.SkipDownload, None
 
@@ -60,11 +61,11 @@ async def save_msg_to_file(
 
 @record_download_status
 async def download_media(
-        client: pyrogram.client.Client,
-        message: pyrogram.types.Message,
-        media_types: List[str],
-        file_formats: dict,
-        node: TaskNode,
+    client: pyrogram.client.Client,
+    message: pyrogram.types.Message,
+    media_types: List[str],
+    file_formats: dict,
+    node: TaskNode,
 ):
     """Download media from a Telegram message."""
     from workers.download import (
@@ -84,7 +85,7 @@ async def download_media(
     temp_file_name = None
 
     # Check exit signal
-    if getattr(app, 'force_exit', False):
+    if getattr(app, "force_exit", False):
         logger.debug(f"消息 {message.id}: 程序正在退出，跳过下载")
         return DownloadStatus.FailedDownload, None
 
@@ -94,9 +95,9 @@ async def download_media(
     for _type in media_types:
         _media_check = getattr(message, _type, None)
         if _media_check is not None:
-            media_uid = getattr(_media_check, 'file_unique_id', None)
+            media_uid = getattr(_media_check, "file_unique_id", None)
             if media_uid:
-                threshold = getattr(app, 'download_duplicate_threshold', 5)
+                threshold = getattr(app, "download_duplicate_threshold", 5)
                 current_count = ctx._media_download_count.get(media_uid, 0)
                 if threshold > 0 and current_count >= threshold:
                     logger.info(
@@ -127,7 +128,9 @@ async def download_media(
             if app.hide_file_name:
                 ui_file_name = f"****{os.path.splitext(file_name)[-1]}"
 
-            logger.debug(f"消息 {message.id}: 类型={_type}, 大小={media_size} bytes, 格式={file_format}")
+            logger.debug(
+                f"消息 {message.id}: 类型={_type}, 大小={media_size} bytes, 格式={file_format}"
+            )
 
             if _can_download(_type, file_formats, file_format):
                 if _is_exist(file_name):
@@ -161,7 +164,7 @@ async def download_media(
     for retry in range(3):
         try:
             # Check exit signal
-            if getattr(app, 'force_exit', False):
+            if getattr(app, "force_exit", False):
                 logger.debug(f"消息 {message.id}: 程序正在退出，中止下载")
                 # Clean up temp file
                 if temp_file_name and os.path.exists(temp_file_name):
@@ -194,7 +197,7 @@ async def download_media(
                 _move_to_download_path(temp_download_path, file_name)
 
                 # Mark media as seen for deduplication
-                media_uid = getattr(_media, 'file_unique_id', None)
+                media_uid = getattr(_media, "file_unique_id", None)
                 if media_uid and media_uid not in _media_seen:
                     _media_seen.add(media_uid)
                     _save_seen_media(_media_seen)
@@ -206,7 +209,9 @@ async def download_media(
             logger.warning(f"网络连接错误: {e}，重试 {retry + 1}/3")
             await asyncio.sleep(RETRY_TIME_OUT * (retry + 1))
             if retry == 2:
-                await record_failed_task(node.chat_id, message.id, f"Network error: {str(e)}")
+                await record_failed_task(
+                    node.chat_id, message.id, f"Network error: {str(e)}"
+                )
                 raise
         except asyncio.CancelledError:
             logger.info(f"消息 {message.id} 下载被取消")
@@ -266,7 +271,9 @@ async def download_task(client, message, node):
             removed = await remove_failed_task(node.chat_id, message.id)
             if removed:
                 disk_monitor.retry_success_count += 1
-                logger.info(f"[RETRY] 重试成功: chat_id={node.chat_id}, message_id={message.id}")
+                logger.info(
+                    f"[RETRY] 重试成功: chat_id={node.chat_id}, message_id={message.id}"
+                )
 
         if file_name and os.path.exists(file_name):
             try:
@@ -278,21 +285,30 @@ async def download_task(client, message, node):
         # Clear download_result early so web UI doesn't count upload phase
         try:
             from module.download_stat import remove_download_record
+
             await remove_download_record(node.chat_id, message.id)
         except Exception as e:
             logger.error(f"清除下载记录失败: {e}")
 
         # Upload the main media file FIRST (mp4 / jpg / etc.)
-        media_file_to_upload = original_download_status == DownloadStatus.SuccessDownload and file_name or None
+        media_file_to_upload = (
+            original_download_status == DownloadStatus.SuccessDownload
+            and file_name
+            or None
+        )
         if media_file_to_upload and not node.upload_telegram_chat_id:
             logger.info(f"开始上传文件: {media_file_to_upload}")
             ui_file_name = media_file_to_upload
             if app.hide_file_name:
                 ui_file_name = f"****{os.path.splitext(media_file_to_upload)[-1]}"
             upload_ok = await app.upload_file(
-                media_file_to_upload, update_cloud_upload_stat, (node, message.id, ui_file_name)
+                media_file_to_upload,
+                update_cloud_upload_stat,
+                (node, message.id, ui_file_name),
             )
-            logger.debug(f"[UPLOAD] download_task 媒体上传结果: ok={upload_ok}, file={media_file_to_upload}")
+            logger.debug(
+                f"[UPLOAD] download_task 媒体上传结果: ok={upload_ok}, file={media_file_to_upload}"
+            )
             if upload_ok:
                 node.upload_success_count += 1
 
@@ -300,12 +316,18 @@ async def download_task(client, message, node):
         download_status = original_download_status
         if app.enable_download_txt and (message.text or message.caption):
             txt_status, txt_path = await save_msg_to_file(app, node.chat_id, message)
-            if txt_status == DownloadStatus.SuccessDownload and txt_path and not node.upload_telegram_chat_id:
+            if (
+                txt_status == DownloadStatus.SuccessDownload
+                and txt_path
+                and not node.upload_telegram_chat_id
+            ):
                 logger.info(f"开始上传文件: {txt_path}")
                 upload_txt_ok = await app.upload_file(
                     txt_path, update_cloud_upload_stat, (node, message.id, txt_path)
                 )
-                logger.debug(f"[UPLOAD] download_task txt 上传结果: ok={upload_txt_ok}, file={txt_path}")
+                logger.debug(
+                    f"[UPLOAD] download_task txt 上传结果: ok={upload_txt_ok}, file={txt_path}"
+                )
 
         if not node.bot:
             app.set_download_id(node, message.id, download_status)
@@ -336,7 +358,7 @@ async def download_task(client, message, node):
         # Remove from download_result to avoid stale entries in frontend
         try:
             from module.download_stat import remove_download_record
+
             await remove_download_record(node.chat_id, message.id)
         except Exception as e:
             logger.error(f"清除下载记录失败: {e}")
-

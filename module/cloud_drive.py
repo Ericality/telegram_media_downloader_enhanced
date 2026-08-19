@@ -7,6 +7,7 @@ import functools
 import importlib
 import inspect
 import json
+import logging
 import os
 import re
 from asyncio import subprocess
@@ -14,7 +15,7 @@ from datetime import datetime
 from subprocess import Popen
 from typing import Callable, Optional
 from zipfile import ZipFile
-import logging
+
 from utils import platform
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
     """Check if the configured rclone remote is accessible (read + write).
 
     Runs a full round-trip: list root → upload tiny file → verify → delete.
-    
+
     Returns:
         (success: bool, message: str)
     """
@@ -77,30 +78,40 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
             subdir_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_rclone_env()
+            env=_rclone_env(),
         )
         await asyncio.wait_for(subdir_proc.communicate(), timeout=15)
         # mkdir may return non-zero if directory already exists — that's OK
 
         # Write test: upload a tiny file
-        remote_test_path = f"{drive_config.remote_dir.rstrip('/')}/_rclone_verify_test.txt"
+        remote_test_path = (
+            f"{drive_config.remote_dir.rstrip('/')}/_rclone_verify_test.txt"
+        )
 
         with open(test_file, "w") as f:
             f.write("rclone verify test")
 
         logger.info(f"验证 Rclone 远程存储写入: {remote_test_path}")
-        upload_cmd = f'"{drive_config.rclone_path}" copyto "{test_file}" "{remote_test_path}"'
+        upload_cmd = (
+            f'"{drive_config.rclone_path}" copyto "{test_file}" "{remote_test_path}"'
+        )
         upload_proc = await asyncio.create_subprocess_shell(
             upload_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_rclone_env()
+            env=_rclone_env(),
         )
-        upload_stdout, upload_stderr = await asyncio.wait_for(upload_proc.communicate(), timeout=60)
+        upload_stdout, upload_stderr = await asyncio.wait_for(
+            upload_proc.communicate(), timeout=60
+        )
 
-        upload_stderr_text = upload_stderr.decode(errors="replace") if upload_stderr else ""
+        upload_stderr_text = (
+            upload_stderr.decode(errors="replace") if upload_stderr else ""
+        )
         if upload_proc.returncode != 0:
-            logger.warning(f"copyto 退出码非零: {upload_proc.returncode}，stderr: {upload_stderr_text[:300]}，将尝试验证文件内容")
+            logger.warning(
+                f"copyto 退出码非零: {upload_proc.returncode}，stderr: {upload_stderr_text[:300]}，将尝试验证文件内容"
+            )
 
         # Read back uploaded content to verify (lsf can see 0-byte stubs on OneDrive)
         verify_cmd = f'"{drive_config.rclone_path}" cat "{remote_test_path}"'
@@ -108,18 +119,23 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
             verify_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_rclone_env()
+            env=_rclone_env(),
         )
         verify_stdout, _ = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
         # Re-read local test file content for comparison
         with open(test_file, "r") as f:
             expected = f.read()
-        uploaded_content = verify_stdout.decode(errors="replace") if verify_stdout else ""
+        uploaded_content = (
+            verify_stdout.decode(errors="replace") if verify_stdout else ""
+        )
 
         if uploaded_content != expected:
             if os.path.exists(test_file):
                 os.remove(test_file)
-            return False, f"云端内容验证失败: 上传后读回的内容不匹配（本地={expected!r}, 远程={uploaded_content!r}）"
+            return (
+                False,
+                f"云端内容验证失败: 上传后读回的内容不匹配（本地={expected!r}, 远程={uploaded_content!r}）",
+            )
 
         if upload_proc.returncode != 0:
             logger.info("copyto 退出码非零但内容验证通过，视为验证成功")
@@ -130,7 +146,7 @@ async def verify_rclone_remote(drive_config: CloudDriveConfig) -> tuple:
             delete_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_rclone_env()
+            env=_rclone_env(),
         )
         await asyncio.wait_for(delete_proc.communicate(), timeout=15)
         # delete failure is non-critical — log but don't block startup
@@ -165,7 +181,7 @@ async def get_cloud_storage_used(drive_config: CloudDriveConfig) -> Optional[str
             cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_rclone_env()
+            env=_rclone_env(),
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
         out = stdout.decode(errors="replace") if stdout else ""
@@ -220,16 +236,18 @@ class CloudDrive:
 
     @staticmethod
     async def rclone_upload_file(
-            drive_config: CloudDriveConfig,
-            save_path: str,
-            local_file_path: str,
-            progress_callback: Callable = None,
-            progress_args: tuple = (),
+        drive_config: CloudDriveConfig,
+        save_path: str,
+        local_file_path: str,
+        progress_callback: Callable = None,
+        progress_args: tuple = (),
     ) -> bool:
         """Use Rclone upload file (copy or move)"""
         try:
             # Build remote directory path
-            rel_path = os.path.dirname(local_file_path).replace(save_path, "").lstrip("/\\")
+            rel_path = (
+                os.path.dirname(local_file_path).replace(save_path, "").lstrip("/\\")
+            )
             remote_dir = drive_config.remote_dir.rstrip("/") + "/" + rel_path + "/"
             remote_dir = remote_dir.replace("\\", "/").replace("//", "/")
             logger.info(f"准备上传到远程目录: {remote_dir}")
@@ -258,8 +276,11 @@ class CloudDrive:
             logger.info(f"执行 rclone 命令: {cmd}")
 
             proc = await asyncio.create_subprocess_shell(
-                cmd, shell=True, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                env=_rclone_env()
+                cmd,
+                shell=True,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=_rclone_env(),
             )
 
             success = False
@@ -279,7 +300,9 @@ class CloudDrive:
                         success = True
 
                     # Parse progress info
-                    pattern = r"Transferred: (.*?) / (.*?), (.*?)%, (.*?/s)?, ETA (.*?)$"
+                    pattern = (
+                        r"Transferred: (.*?) / (.*?), (.*?)%, (.*?/s)?, ETA (.*?)$"
+                    )
                     match = re.search(pattern, line)
                     if match:
                         transferred, total, percent, speed, eta = match.groups()
@@ -290,26 +313,54 @@ class CloudDrive:
                         # Call progress callback with full args
                         if progress_callback and progress_args:
                             if len(progress_args) >= 3:
-                                node, msg_id, fname = progress_args[0], progress_args[1], progress_args[2]
+                                node, msg_id, fname = (
+                                    progress_args[0],
+                                    progress_args[1],
+                                    progress_args[2],
+                                )
                                 if inspect.iscoroutinefunction(progress_callback):
-                                    await progress_callback(transferred, total, percent, speed, eta, node, msg_id,
-                                                            fname)
+                                    await progress_callback(
+                                        transferred,
+                                        total,
+                                        percent,
+                                        speed,
+                                        eta,
+                                        node,
+                                        msg_id,
+                                        fname,
+                                    )
                                 else:
                                     await asyncio.get_event_loop().run_in_executor(
-                                        None, progress_callback, transferred, total, percent, speed, eta, node, msg_id,
-                                        fname
+                                        None,
+                                        progress_callback,
+                                        transferred,
+                                        total,
+                                        percent,
+                                        speed,
+                                        eta,
+                                        node,
+                                        msg_id,
+                                        fname,
                                     )
                             else:
-                                logger.warning(f"progress_args 长度不足: {len(progress_args)}, 期望至少3个")
+                                logger.warning(
+                                    f"progress_args 长度不足: {len(progress_args)}, 期望至少3个"
+                                )
 
             # Wait for process to finish
             returncode = await proc.wait()
-            stderr = (await proc.stderr.read()).decode(errors="replace") if proc.stderr else ""
+            stderr = (
+                (await proc.stderr.read()).decode(errors="replace")
+                if proc.stderr
+                else ""
+            )
 
             if not success:
                 # rclone returned non-zero but we never detected 100% — check stderr for clues
                 if returncode != 0:
-                    logger.error(f"rclone 进程退出码: {returncode}（未检测到 100% 进度）, stderr: {stderr}")
+                    logger.error(
+                        f"rclone 进程退出码: {returncode}（未检测到 100% 进度）, stderr: {stderr}"
+                    )
                     # OneDrive "cancel multipart upload: unauthenticated" is a false-negative;
                     # the file may still have been uploaded successfully — check below.
                 else:
@@ -336,10 +387,16 @@ class CloudDrive:
                     verify_cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=_rclone_env()
+                    env=_rclone_env(),
                 )
-                verify_stdout, verify_stderr = await asyncio.wait_for(verify_proc.communicate(), timeout=15)
-                size_output = verify_stdout.decode(errors="replace").strip() if verify_stdout else ""
+                verify_stdout, verify_stderr = await asyncio.wait_for(
+                    verify_proc.communicate(), timeout=15
+                )
+                size_output = (
+                    verify_stdout.decode(errors="replace").strip()
+                    if verify_stdout
+                    else ""
+                )
                 logger.debug(f"rclone size 输出: {size_output}")
 
                 # Parse rclone size: "Total size: 230 KiB (235590 Byte)"
@@ -350,8 +407,10 @@ class CloudDrive:
                         remote_size = int(m.group(1))
                         break
 
-                cloud_file_ok = remote_size == local_file_size if remote_size != -1 else (
-                    verify_proc.returncode == 0
+                cloud_file_ok = (
+                    remote_size == local_file_size
+                    if remote_size != -1
+                    else (verify_proc.returncode == 0)
                 )
 
                 if not cloud_file_ok and os.path.exists(file_to_upload):
@@ -371,7 +430,11 @@ class CloudDrive:
                     except Exception as e:
                         logger.warning(f"删除本地文件失败: {e}")
 
-                if drive_config.before_upload_file_zip and zip_file_path and os.path.exists(zip_file_path):
+                if (
+                    drive_config.before_upload_file_zip
+                    and zip_file_path
+                    and os.path.exists(zip_file_path)
+                ):
                     try:
                         os.remove(zip_file_path)
                     except Exception as e:
@@ -382,8 +445,7 @@ class CloudDrive:
                 # Upload failed — append to single upload-failure log file
                 if os.path.exists(file_to_upload):
                     failed_log = os.path.join(
-                        os.path.dirname(file_to_upload),
-                        "upload_failed.json"
+                        os.path.dirname(file_to_upload), "upload_failed.json"
                     )
                     entry = {
                         "timestamp": datetime.now().isoformat(),
@@ -392,7 +454,9 @@ class CloudDrive:
                         "rclone_action": rclone_action,
                         "rclone_exit_code": returncode,
                         "rclone_stderr": stderr,
-                        "local_file_size": os.path.getsize(file_to_upload) if os.path.exists(file_to_upload) else -1
+                        "local_file_size": os.path.getsize(file_to_upload)
+                        if os.path.exists(file_to_upload)
+                        else -1,
                     }
                     try:
                         records = []
@@ -491,8 +555,10 @@ class CloudDrive:
         bool
             True or False
         """
-        logger.info(f"[UPLOAD] upload_file 被调用: enable={drive_config.enable_upload_file}, "
-                    f"adapter={drive_config.upload_adapter}, file={local_file_path}")
+        logger.info(
+            f"[UPLOAD] upload_file 被调用: enable={drive_config.enable_upload_file}, "
+            f"adapter={drive_config.upload_adapter}, file={local_file_path}"
+        )
         if not drive_config.enable_upload_file:
             return False
 

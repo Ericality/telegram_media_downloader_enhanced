@@ -5,11 +5,18 @@ chat download configuration, and file path generation.
 """
 
 import asyncio
+import glob
 import os
+import shutil
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Callable, List, Optional, Union, Dict, Any, Type
+from typing import Any, Callable, Dict, List, Optional, Type, Union
+
+from loguru import logger
+from ruamel import yaml
+from ruamel.yaml import YAML
 
 from core.models import (
     ChatDownloadConfig,
@@ -24,25 +31,14 @@ from core.models import (
     UploadProgressStat,
     UploadStatus,
 )
-from loguru import logger
-from ruamel import yaml
-from ruamel.yaml import YAML
-
 from module.cloud_drive import CloudDrive, CloudDriveConfig
 from module.filter import Filter
 from module.language import Language, set_language
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
 
-import os
-import glob
-import tempfile
-import shutil
-
 _yaml = yaml.YAML()
 # pylint: disable = R0902
-
-
 
 
 def get_config(config, key, default=None, val_type=str, verbose=True):
@@ -96,19 +92,31 @@ class ConfigSchema:
         "file_name_prefix": (["message_id", "file_name"], list, None),
         "file_name_prefix_split": (" - ", str, None),
         "log_file_path": (os.path.join(os.path.abspath("."), "log"), str, None),
-        "session_file_path": (os.path.join(os.path.abspath("."), "sessions"), str, None),
+        "session_file_path": (
+            os.path.join(os.path.abspath("."), "sessions"),
+            str,
+            None,
+        ),
         "hide_file_name": (False, bool, None),
         "max_concurrent_transmissions": (5, int, None),
         "web_host": ("0.0.0.0", str, None),
         "web_port": (5000, int, None),
         "max_download_task": (5, int, None),
-        "language": (Language.EN, Language, lambda x: Language[x.upper()] if isinstance(x, str) else x),
+        "language": (
+            Language.EN,
+            Language,
+            lambda x: Language[x.upper()] if isinstance(x, str) else x,
+        ),
         "after_upload_telegram_delete": (True, bool, None),
         "web_login_secret": ("", str, lambda x: str(x)),
         "debug_web": (False, bool, None),
         "log_level": ("INFO", str, None),
         "start_timeout": (60, int, None),
-        "allowed_user_ids": (yaml.comments.CommentedSeq([]), yaml.comments.CommentedSeq, None),
+        "allowed_user_ids": (
+            yaml.comments.CommentedSeq([]),
+            yaml.comments.CommentedSeq,
+            None,
+        ),
         "date_format": ("%Y_%m", str, None),
         "drop_no_audio_video": (False, bool, None),
         "enable_download_txt": (False, bool, None),
@@ -119,41 +127,45 @@ class ConfigSchema:
     # Notification config schema
     NOTIFICATION_CONFIG = {
         # Key: (default, type, converter or None)
-        "notifications": ({
-                              # Bark config
-                              "bark": {
-                                  "enabled": False,
-                                  "url": "",
-                                  "default_group": "TelegramDownloader",
-                                  "default_level": "active",
-                                  "events_to_notify": [],
-                                  "disk_space_threshold_gb": 10.0,
-                                  "space_check_interval": 300,
-                                  "stats_notification_interval": 3600,
-                                  "notify_worker_count": 1,
-                                  "sound": "alarm"
-                              },
-                              # Synology Chat config
-                              "synology_chat": {
-                                  "enabled": False,
-                                  "webhook_url": "",
-                                  "bot_name": "Telegram下载器",
-                                  "bot_avatar": "https://telegram.org/img/t_logo.png",
-                                  "default_level": "info",
-                                  "events_to_notify": [],
-                                  "mention_users": [],
-                                  "mention_channels": [],
-                                  "disk_space_threshold_gb": 10.0,
-                                  "space_check_interval": 300
-                              },
-                              # Global config
-                              "global": {
-                                  "stats_notification_interval": 3600,
-                                  "queue_monitor_interval": 300,
-                                  "max_notification_retries": 3,
-                                  "default_timeout": 15
-                              }
-                          }, dict, None),
+        "notifications": (
+            {
+                # Bark config
+                "bark": {
+                    "enabled": False,
+                    "url": "",
+                    "default_group": "TelegramDownloader",
+                    "default_level": "active",
+                    "events_to_notify": [],
+                    "disk_space_threshold_gb": 10.0,
+                    "space_check_interval": 300,
+                    "stats_notification_interval": 3600,
+                    "notify_worker_count": 1,
+                    "sound": "alarm",
+                },
+                # Synology Chat config
+                "synology_chat": {
+                    "enabled": False,
+                    "webhook_url": "",
+                    "bot_name": "Telegram下载器",
+                    "bot_avatar": "https://telegram.org/img/t_logo.png",
+                    "default_level": "info",
+                    "events_to_notify": [],
+                    "mention_users": [],
+                    "mention_channels": [],
+                    "disk_space_threshold_gb": 10.0,
+                    "space_check_interval": 300,
+                },
+                # Global config
+                "global": {
+                    "stats_notification_interval": 3600,
+                    "queue_monitor_interval": 300,
+                    "max_notification_retries": 3,
+                    "default_timeout": 15,
+                },
+            },
+            dict,
+            None,
+        ),
     }
 
     @classmethod
@@ -190,10 +202,10 @@ class Application:
     """Application load config and update config."""
 
     def __init__(
-            self,
-            config_file: str,
-            app_data_file: str,
-            application_name: str = "UndefineApp",
+        self,
+        config_file: str,
+        app_data_file: str,
+        application_name: str = "UndefineApp",
     ):
         """
         Init and update telegram media downloader config
@@ -240,7 +252,11 @@ class Application:
 
     def _init_config_from_schema(self):
         """Initialize all config items from schema."""
-        for key, (default_value, value_type, converter) in ConfigSchema.get_all_configs().items():
+        for key, (
+            default_value,
+            value_type,
+            converter,
+        ) in ConfigSchema.get_all_configs().items():
             setattr(self, key, default_value)
             self._config[key] = default_value
 
@@ -268,11 +284,18 @@ class Application:
 
             # Type check with flexible coercion
             if expected_type and not isinstance(converted_value, expected_type):
-                    # Try automatic type coercion
+                # Try automatic type coercion
                 try:
                     if expected_type == bool:
                         if isinstance(converted_value, str):
-                            converted_value = converted_value.lower() in ('true', '1', 'yes', 'on', 't', 'y')
+                            converted_value = converted_value.lower() in (
+                                "true",
+                                "1",
+                                "yes",
+                                "on",
+                                "t",
+                                "y",
+                            )
                         elif isinstance(converted_value, int):
                             converted_value = bool(converted_value)
                     elif expected_type == int:
@@ -281,7 +304,9 @@ class Application:
                         converted_value = float(converted_value)
                     elif expected_type == str:
                         converted_value = str(converted_value)
-                    elif expected_type == list and isinstance(converted_value, (tuple, set)):
+                    elif expected_type == list and isinstance(
+                        converted_value, (tuple, set)
+                    ):
                         converted_value = list(converted_value)
                     else:
                         # Coercion failed, use default
@@ -321,11 +346,24 @@ class Application:
         self._process_general_configs(_config)
 
         # Handle config keys not in schema
-        known_keys = set(ConfigSchema.BASE_CONFIG.keys()) | set(ConfigSchema.NOTIFICATION_CONFIG.keys())
+        known_keys = set(ConfigSchema.BASE_CONFIG.keys()) | set(
+            ConfigSchema.NOTIFICATION_CONFIG.keys()
+        )
         # Keys with dedicated processing handlers (not "unknown" even though not in schema)
-        dedicated_keys = {"chat", "upload_drive", "bark_notification", "ids_to_retry", "chat_id", "download_filter"}
+        dedicated_keys = {
+            "chat",
+            "upload_drive",
+            "bark_notification",
+            "ids_to_retry",
+            "chat_id",
+            "download_filter",
+        }
         for key, value in _config.items():
-            if key not in known_keys and key not in dedicated_keys and not hasattr(self, key):
+            if (
+                key not in known_keys
+                and key not in dedicated_keys
+                and not hasattr(self, key)
+            ):
                 # Set unknown keys as attributes directly
                 setattr(self, key, value)
                 logger.debug(f"加载未声明配置项 {key}: {value}")
@@ -343,8 +381,9 @@ class Application:
         self._process_chat_filters()
 
         # Apply log level immediately
-        if hasattr(self, 'log_level'):
+        if hasattr(self, "log_level"):
             import logging
+
             log_level = self.log_level.upper()
             if log_level == "DEBUG":
                 os.environ["DEBUG"] = "1"
@@ -381,8 +420,8 @@ class Application:
                 self._config[key] = converted_value
 
                 # Log value (mask credentials)
-                if key in ['api_id', 'api_hash', 'bot_token', 'web_login_secret']:
-                    masked_value = '****' if raw_value else ''
+                if key in ["api_id", "api_hash", "bot_token", "web_login_secret"]:
+                    masked_value = "****" if raw_value else ""
                     logger.debug(f"加载配置 {key}: {masked_value}")
                 else:
                     logger.debug(f"加载配置 {key}: {raw_value}")
@@ -684,22 +723,22 @@ class Application:
                 id_to_new_value[chat_id] = chat_conf.last_read_message_id
 
             # Update last_read_message_id in existing chat config list (preserve all entries)
-            if 'chat' in config and isinstance(config['chat'], list):
-                for chat_entry in config['chat']:
-                    if isinstance(chat_entry, dict) and 'chat_id' in chat_entry:
-                        cid = chat_entry['chat_id']
+            if "chat" in config and isinstance(config["chat"], list):
+                for chat_entry in config["chat"]:
+                    if isinstance(chat_entry, dict) and "chat_id" in chat_entry:
+                        cid = chat_entry["chat_id"]
                         if cid in id_to_new_value:
-                            chat_entry['last_read_message_id'] = id_to_new_value[cid]
+                            chat_entry["last_read_message_id"] = id_to_new_value[cid]
             else:
-                config['chat'] = [
-                    {'chat_id': cid, 'last_read_message_id': conf.last_read_message_id}
+                config["chat"] = [
+                    {"chat_id": cid, "last_read_message_id": conf.last_read_message_id}
                     for cid, conf in self.chat_download_config.items()
                 ]
 
             updated_count = len(id_to_new_value)
 
-            if hasattr(self, 'language'):
-                config['language'] = self.language.name
+            if hasattr(self, "language"):
+                config["language"] = self.language.name
 
             if not immediate:
                 logger.info(f"跳过写入配置，更新了 {updated_count} 个聊天")
@@ -709,7 +748,9 @@ class Application:
             backup_dir = self.session_file_path
             os.makedirs(backup_dir, exist_ok=True)
             base_name = os.path.basename(self.config_file)
-            backup_path = os.path.join(backup_dir, f"{base_name}.backup.{int(time.time())}")
+            backup_path = os.path.join(
+                backup_dir, f"{base_name}.backup.{int(time.time())}"
+            )
 
             try:
                 if os.path.exists(self.config_file):
@@ -723,7 +764,7 @@ class Application:
                 yaml_writer = YAML()
                 yaml_writer.allow_unicode = True
                 yaml_writer.sort_keys = False
-                with open(self.config_file, 'w', encoding='utf-8') as f:
+                with open(self.config_file, "w", encoding="utf-8") as f:
                     yaml_writer.dump(config, f)
                 logger.success(f"✅ 配置更新成功，更新了 {updated_count} 个聊天的进度")
 
@@ -745,8 +786,9 @@ class Application:
 
     def _clean_old_backups(self, backup_dir, base_name, keep=3):
         """Clean up old backup files"""
-        import os
         import glob
+        import os
+
         pattern = os.path.join(backup_dir, f"{base_name}.backup.*")
         backups = glob.glob(pattern)
         if len(backups) <= keep:
@@ -758,17 +800,19 @@ class Application:
                 logger.debug(f"删除旧备份: {old}")
             except Exception as e:
                 logger.warning(f"删除旧备份失败: {e}")
+
     def set_language(self, language: Language):
         """Set Language"""
         self.language = language
         set_language(language)
 
     def load_config(self) -> bool:
-        import os
         import glob
+        import os
         import shutil
-        from ruamel.yaml import YAML
+
         from loguru import logger
+        from ruamel.yaml import YAML
 
         config_path = self.config_file
 
@@ -792,7 +836,7 @@ class Application:
         try:
             yaml_loader = YAML()
             yaml_loader.allow_duplicate_keys = True
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config_data = yaml_loader.load(f)
                 if config_data is None:
                     config_data = {}
@@ -808,7 +852,7 @@ class Application:
                 logger.warning(f"配置解析失败，尝试从备份恢复: {latest_backup}")
                 try:
                     shutil.copy2(latest_backup, config_path)
-                    with open(config_path, 'r', encoding='utf-8') as f:
+                    with open(config_path, "r", encoding="utf-8") as f:
                         config_data = yaml_loader.load(f) or {}
                     self.assign_config(config_data)
                     logger.info("已从备份恢复配置文件并成功加载")
@@ -925,13 +969,21 @@ class Application:
                 "bark": {
                     "enabled": bark_config.get("enabled", False),
                     "url": bark_config.get("url", ""),
-                    "default_group": bark_config.get("default_group", "TelegramDownloader"),
+                    "default_group": bark_config.get(
+                        "default_group", "TelegramDownloader"
+                    ),
                     "default_level": bark_config.get("default_level", "active"),
                     "events_to_notify": bark_config.get("events_to_notify", []),
-                    "disk_space_threshold_gb": bark_config.get("disk_space_threshold_gb", 10.0),
-                    "space_check_interval": bark_config.get("space_check_interval", 300),
-                    "stats_notification_interval": bark_config.get("stats_notification_interval", 3600),
-                    "notify_worker_count": bark_config.get("notify_worker_count", 1)
+                    "disk_space_threshold_gb": bark_config.get(
+                        "disk_space_threshold_gb", 10.0
+                    ),
+                    "space_check_interval": bark_config.get(
+                        "space_check_interval", 300
+                    ),
+                    "stats_notification_interval": bark_config.get(
+                        "stats_notification_interval", 3600
+                    ),
+                    "notify_worker_count": bark_config.get("notify_worker_count", 1),
                 },
                 "synology_chat": {
                     "enabled": False,
@@ -940,14 +992,16 @@ class Application:
                     "default_level": "info",
                     "events_to_notify": [],
                     "disk_space_threshold_gb": 10.0,
-                    "space_check_interval": 300
+                    "space_check_interval": 300,
                 },
                 "global": {
-                    "stats_notification_interval": bark_config.get("stats_notification_interval", 3600),
+                    "stats_notification_interval": bark_config.get(
+                        "stats_notification_interval", 3600
+                    ),
                     "queue_monitor_interval": 300,
                     "max_notification_retries": 3,
-                    "default_timeout": 15
-                }
+                    "default_timeout": 15,
+                },
             }
 
             # Merge into existing config
@@ -985,7 +1039,7 @@ class Application:
                     "url": "",
                     "default_group": "TelegramDownloader",
                     "default_level": "active",
-                    "events_to_notify": []
+                    "events_to_notify": [],
                 }
 
             if "synology_chat" not in notifications_config:
@@ -994,7 +1048,7 @@ class Application:
                     "webhook_url": "",
                     "bot_name": "Telegram下载器",
                     "default_level": "info",
-                    "events_to_notify": []
+                    "events_to_notify": [],
                 }
 
             if "global" not in notifications_config:
@@ -1002,7 +1056,7 @@ class Application:
                     "stats_notification_interval": 3600,
                     "queue_monitor_interval": 300,
                     "max_notification_retries": 3,
-                    "default_timeout": 15
+                    "default_timeout": 15,
                 }
 
             # Set on instance attributes
@@ -1013,8 +1067,10 @@ class Application:
             self.bark_notification = notifications_config.get("bark", {})
             self._config["bark_notification"] = self.bark_notification
 
-            logger.debug(f"已加载通知配置: Bark={notifications_config['bark'].get('enabled', False)}, "
-                         f"SynologyChat={notifications_config['synology_chat'].get('enabled', False)}")
+            logger.debug(
+                f"已加载通知配置: Bark={notifications_config['bark'].get('enabled', False)}, "
+                f"SynologyChat={notifications_config['synology_chat'].get('enabled', False)}"
+            )
         else:
             # Use defaults if no notifications config present
             self.notifications = ConfigSchema.get_default("notifications")

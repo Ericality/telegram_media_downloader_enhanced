@@ -15,11 +15,7 @@ from core.models import ChatDownloadConfig, DownloadStatus, TaskNode
 from core.storage import load_failed_tasks, record_failed_task, remove_failed_task
 from module.get_chat_history_v2 import get_chat_history_v2
 from module.language import _t
-from module.pyrogram_extension import (
-    get_extension,
-    set_meta_data,
-    upload_telegram_chat,
-)
+from module.pyrogram_extension import get_extension, set_meta_data, upload_telegram_chat
 from services.notifier import send_bark_notification
 from utils.format import truncate_filename, validate_title
 from utils.meta_data import MetaData
@@ -68,10 +64,10 @@ def _is_exist(file_path: str) -> bool:
 
 
 async def _get_media_meta(
-        chat_id: Union[int, str],
-        message: pyrogram.types.Message,
-        media_obj: Union[Audio, Document, Photo, Video, VideoNote, Voice],
-        _type: str,
+    chat_id: Union[int, str],
+    message: pyrogram.types.Message,
+    media_obj: Union[Audio, Document, Photo, Video, VideoNote, Voice],
+    _type: str,
 ) -> Tuple[str, str, Optional[str]]:
     """Extract filename and file ID from a media object."""
     if _type in ["audio", "document", "video"]:
@@ -86,7 +82,7 @@ async def _get_media_meta(
         dirname = validate_title(f"{message.chat.title}")
 
     if message.date:
-        datetime_dir_name = message.date.strftime(app.get_config('date_format'))
+        datetime_dir_name = message.date.strftime(app.get_config("date_format"))
     else:
         datetime_dir_name = "0"
 
@@ -100,7 +96,9 @@ async def _get_media_meta(
             file_format,
         )
         file_name = validate_title(file_name)
-        temp_file_name = os.path.join(app.get_config('temp_save_path'), dirname, file_name)
+        temp_file_name = os.path.join(
+            app.get_config("temp_save_path"), dirname, file_name
+        )
         file_name = os.path.join(file_save_path, file_name)
     else:
         file_name = getattr(media_obj, "file_name", None)
@@ -132,26 +130,28 @@ async def _get_media_meta(
             file_name = f"{message.photo.file_unique_id}"
 
         gen_file_name = (
-                app.get_file_name(message.id, file_name, caption) + file_name_suffix
+            app.get_file_name(message.id, file_name, caption) + file_name_suffix
         )
 
         file_save_path = app.get_file_save_path(_type, dirname, datetime_dir_name)
-        temp_file_name = os.path.join(app.get_config('temp_save_path'), dirname, gen_file_name)
+        temp_file_name = os.path.join(
+            app.get_config("temp_save_path"), dirname, gen_file_name
+        )
         file_name = os.path.join(file_save_path, gen_file_name)
 
     return truncate_filename(file_name), truncate_filename(temp_file_name), file_format
 
 
 async def add_download_task(
-        message: pyrogram.types.Message,
-        node: TaskNode,
-        is_retry: bool = False,
+    message: pyrogram.types.Message,
+    node: TaskNode,
+    is_retry: bool = False,
 ) -> bool:
     """Add download task to queue — blocks until a free slot is available."""
     if message.empty:
         return False
 
-    if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+    if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
         logger.debug(f"程序正在退出，跳过添加任务: message_id={message.id}")
         return False
 
@@ -168,17 +168,23 @@ async def add_download_task(
 
             if not is_retry:
                 chat_id_str = str(node.chat_id)
-                chat_config = app.chat_download_config.get(node.chat_id) or app.chat_download_config.get(chat_id_str)
+                chat_config = app.chat_download_config.get(
+                    node.chat_id
+                ) or app.chat_download_config.get(chat_id_str)
                 if chat_config:
                     try:
                         message_id_int = int(message.id)
-                        current_last_id = getattr(chat_config, 'last_read_message_id', 0)
+                        current_last_id = getattr(
+                            chat_config, "last_read_message_id", 0
+                        )
                         if current_last_id is None:
                             current_last_id = 0
                         current_last_id = int(current_last_id)
                         if message_id_int > current_last_id:
                             chat_config.last_read_message_id = message_id_int
-                            logger.debug(f"更新聊天 {node.chat_id} 的 last_read_message_id 到 {message_id_int}")
+                            logger.debug(
+                                f"更新聊天 {node.chat_id} 的 last_read_message_id 到 {message_id_int}"
+                            )
                             app.update_config(immediate=True)
                     except (ValueError, TypeError) as e:
                         logger.error(f"更新 last_read_message_id 时出错: {e}")
@@ -187,7 +193,9 @@ async def add_download_task(
 
         if wait_seconds > 60:
             logger.warning(f"任务添加等待 {int(wait_seconds)} 秒: message_id={message.id}")
-        logger.debug(f"[{'RETRY' if is_retry else 'NEW'}] 已添加下载任务: message_id={message.id}, 队列大小={ctx.download_queue.qsize()}")
+        logger.debug(
+            f"[{'RETRY' if is_retry else 'NEW'}] 已添加下载任务: message_id={message.id}, 队列大小={ctx.download_queue.qsize()}"
+        )
         return True
 
     except asyncio.CancelledError:
@@ -205,7 +213,7 @@ async def retry_producer(client: pyrogram.Client):
     retry_ratio = 4
     new_task_count = 0
 
-    while getattr(app, 'is_running', True) and not getattr(app, 'force_exit', False):
+    while getattr(app, "is_running", True) and not getattr(app, "force_exit", False):
         try:
             if ctx.download_queue.qsize() >= queue_manager.download_queue_size:
                 await asyncio.sleep(1)
@@ -226,11 +234,13 @@ async def retry_producer(client: pyrogram.Client):
                     continue
 
                 task = failed_tasks[0]
-                msg_id = task['message_id']
+                msg_id = task["message_id"]
                 try:
                     msg = await client.get_messages(chat_id, msg_id)
                     if msg is not None:
-                        success = await add_download_task(msg, chat_config.node, is_retry=True)
+                        success = await add_download_task(
+                            msg, chat_config.node, is_retry=True
+                        )
                         if success:
                             await remove_failed_task(chat_id, msg_id)
                             logger.info(f"重试生产者: 为聊天 {chat_id} 添加重试任务 {msg_id}")
@@ -258,13 +268,12 @@ async def retry_producer(client: pyrogram.Client):
 
 
 async def add_download_task_batch(
-        messages: List[pyrogram.types.Message],
-        node: TaskNode,
-
+    messages: List[pyrogram.types.Message],
+    node: TaskNode,
 ) -> int:
     """Batch add download tasks sequentially, respecting queue capacity."""
     # Check if program is still running
-    if not getattr(app, 'is_running', True) or getattr(app, 'force_exit', False):
+    if not getattr(app, "is_running", True) or getattr(app, "force_exit", False):
         logger.debug("程序不在运行状态，跳过批量添加")
         for msg in messages:
             if msg:
@@ -302,18 +311,18 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
 
     while True:
         # Check forced exit signal
-        if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+        if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
             logger.debug(f"下载Worker {worker_id} 收到退出信号，准备退出")
             break
 
         try:
             # Check cloud upload health before disk check
-            if not getattr(app, 'force_exit', False):
+            if not getattr(app, "force_exit", False):
                 if not ctx.cloud_upload_ok:
                     if worker_id not in disk_monitor.paused_workers:
                         logger.warning(f"下载Worker {worker_id}: 云端上传验证失败，暂停下载")
                         disk_monitor.paused_workers.add(worker_id)
-                    if not getattr(app, 'force_exit', False):
+                    if not getattr(app, "force_exit", False):
                         await asyncio.sleep(60)
                         continue
                     else:
@@ -324,25 +333,26 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                         disk_monitor.paused_workers.discard(worker_id)
 
             # Check disk space (skip if exiting)
-            if not getattr(app, 'force_exit', False):
-                bark_config = getattr(app, 'bark_notification', {})
-                threshold_gb = bark_config.get('disk_space_threshold_gb', 10.0)
+            if not getattr(app, "force_exit", False):
+                bark_config = getattr(app, "bark_notification", {})
+                threshold_gb = bark_config.get("disk_space_threshold_gb", 10.0)
 
                 has_space, available_gb, _ = await check_disk_space(threshold_gb)
 
                 if not has_space:
                     if worker_id not in disk_monitor.paused_workers:
                         logger.warning(
-                            f"下载Worker {worker_id}: 磁盘空间不足 ({available_gb}GB < {threshold_gb}GB)，暂停下载")
+                            f"下载Worker {worker_id}: 磁盘空间不足 ({available_gb}GB < {threshold_gb}GB)，暂停下载"
+                        )
                         disk_monitor.paused_workers.add(worker_id)
 
-                        events_to_notify = bark_config.get('events_to_notify', [])
-                        if 'task_paused' in events_to_notify:
+                        events_to_notify = bark_config.get("events_to_notify", [])
+                        if "task_paused" in events_to_notify:
                             message = f"Worker {worker_id}: 因磁盘空间不足暂停下载\n可用空间: {available_gb}GB"
                             await send_bark_notification("下载任务暂停", message)
 
                     # Keep paused state if program is exiting
-                    if not getattr(app, 'force_exit', False):
+                    if not getattr(app, "force_exit", False):
                         await asyncio.sleep(60)
                         continue
                     else:
@@ -354,19 +364,23 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                         disk_monitor.paused_workers.discard(worker_id)
         except Exception as e:
             logger.error(f"下载Worker {worker_id} 检查磁盘空间时异常: {e}")
-            if not getattr(app, 'force_exit', False):
+            if not getattr(app, "force_exit", False):
                 await asyncio.sleep(60)
             continue
 
         try:
             # Use timed get to avoid indefinite blocking
             try:
-                message, node = await asyncio.wait_for(ctx.download_queue.get(), timeout=1.0)
+                message, node = await asyncio.wait_for(
+                    ctx.download_queue.get(), timeout=1.0
+                )
             except asyncio.TimeoutError:
                 continue
 
             # Re-check exit signal before processing
-            if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+            if getattr(app, "force_exit", False) or not getattr(
+                app, "is_running", True
+            ):
                 logger.debug(f"下载Worker {worker_id} 收到退出信号，将任务放回队列")
                 await ctx.download_queue.put((message, node))  # Return task to queue
                 ctx.download_queue.task_done()
@@ -395,12 +409,20 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                 raise
             except OSError as e:
                 logger.error(f"下载Worker {worker_id}: 消息 {message.id} 网络连接错误: {e}")
-                retry_count = await record_failed_task(node.chat_id, message.id, f"Network error: {str(e)}")
-                logger.warning(f"Message {message.id} network error, recorded to failed list (retry count: {retry_count})")
+                retry_count = await record_failed_task(
+                    node.chat_id, message.id, f"Network error: {str(e)}"
+                )
+                logger.warning(
+                    f"Message {message.id} network error, recorded to failed list (retry count: {retry_count})"
+                )
             except Exception as e:
                 logger.error(f"下载Worker {worker_id}: 消息 {message.id} 下载任务异常: {e}")
-                retry_count = await record_failed_task(node.chat_id, message.id, f"Download exception: {str(e)}")
-                logger.warning(f"Message {message.id} download exception, recorded to failed list (retry count: {retry_count})")
+                retry_count = await record_failed_task(
+                    node.chat_id, message.id, f"Download exception: {str(e)}"
+                )
+                logger.warning(
+                    f"Message {message.id} download exception, recorded to failed list (retry count: {retry_count})"
+                )
             finally:
                 ctx.download_queue.task_done()
 
@@ -415,10 +437,10 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
 
 
 async def download_chat_task(
-        client: pyrogram.Client,
-        chat_id: Union[int, str],
-        chat_download_config: ChatDownloadConfig,
-        node: TaskNode,
+    client: pyrogram.Client,
+    chat_id: Union[int, str],
+    chat_download_config: ChatDownloadConfig,
+    node: TaskNode,
 ):
     """Producer: feed new messages to download queue one-by-one.
 
@@ -426,7 +448,9 @@ async def download_chat_task(
     creating natural backpressure — producer waits for workers to free slots.
     """
     try:
-        logger.info(f"开始处理聊天 {chat_id}，last_read_message_id={chat_download_config.last_read_message_id}")
+        logger.info(
+            f"开始处理聊天 {chat_id}，last_read_message_id={chat_download_config.last_read_message_id}"
+        )
 
         messages_iter = get_chat_history_v2(
             client,
@@ -442,7 +466,9 @@ async def download_chat_task(
         async for message in messages_iter:
             logger.debug(f"处理消息 {message.id}")
 
-            if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+            if getattr(app, "force_exit", False) or not getattr(
+                app, "is_running", True
+            ):
                 logger.info(f"生产者收到退出信号，停止添加新任务")
                 break
 
@@ -508,10 +534,10 @@ async def download_all_chat(client: pyrogram.Client):
 
 
 async def retry_failed_tasks(
-        client: pyrogram.Client,
-        chat_id: Union[int, str],
-        node: TaskNode,
-        max_batch: int = None
+    client: pyrogram.Client,
+    chat_id: Union[int, str],
+    node: TaskNode,
+    max_batch: int = None,
 ) -> Tuple[int, int]:
     """Retry failed tasks in batch."""
     if max_batch is None:
@@ -522,7 +548,7 @@ async def retry_failed_tasks(
         return 0, 0
 
     # Get message IDs to retry
-    message_ids = [task['message_id'] for task in failed_tasks[:max_batch]]
+    message_ids = [task["message_id"] for task in failed_tasks[:max_batch]]
 
     if not message_ids:
         return 0, 0
@@ -537,7 +563,7 @@ async def retry_failed_tasks(
             logger.warning(f"聊天 {chat_id} 的失败任务消息已不存在，清理失败列表")
             # Clean up non-existent messages from failed list
             for task in failed_tasks[:max_batch]:
-                await remove_failed_task(chat_id, task['message_id'])
+                await remove_failed_task(chat_id, task["message_id"])
             return len(failed_tasks[:max_batch]), 0
 
         # Add to download queue

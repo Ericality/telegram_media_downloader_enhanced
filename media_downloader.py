@@ -47,14 +47,15 @@ from workers.monitor import (
 )
 from workers.notify import notify_worker
 
-
-custom_theme = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "error": "red",
-    "success": "green",
-    "debug": "dim blue",
-})
+custom_theme = Theme(
+    {
+        "info": "cyan",
+        "warning": "yellow",
+        "error": "red",
+        "success": "green",
+        "debug": "dim blue",
+    }
+)
 console = Console(theme=custom_theme)
 
 # RichHandler initialized at INFO level; reconfigured after config loaded
@@ -65,7 +66,7 @@ rich_handler = RichHandler(
     show_time=True,
     show_path=False,
     tracebacks_show_locals=False,
-    level=logging.INFO
+    level=logging.INFO,
 )
 
 logging.basicConfig(
@@ -80,13 +81,8 @@ logging.basicConfig(
 BARK_LEVELS = {
     "active": "active",
     "timeSensitive": "timeSensitive",
-    "passive": "passive"
+    "passive": "passive",
 }
-
-
-
-
-
 
 
 def run_async_sync(coroutine, loop=None, timeout=10):
@@ -97,6 +93,7 @@ def run_async_sync(coroutine, loop=None, timeout=10):
     if loop and loop.is_running():
         # Use run_coroutine_threadsafe if loop is already running
         import asyncio as aio
+
         future = aio.run_coroutine_threadsafe(coroutine, loop)
         return future.result(timeout=timeout)
     else:
@@ -110,10 +107,10 @@ def setup_exit_signal_handlers():
     def signal_handler(signum, frame):
         logger.info(f"接收到信号 {signum}，正在优雅退出...")
 
-        if hasattr(app, 'is_running'):
+        if hasattr(app, "is_running"):
             app.is_running = False
 
-        if hasattr(app, 'force_exit'):
+        if hasattr(app, "force_exit"):
             app.force_exit = True
 
         if signum == signal.SIGINT:
@@ -146,7 +143,9 @@ async def graceful_shutdown():
 
             # Give notification time to send
             notification_task = asyncio.create_task(
-                notification_manager.send_event_notification("shutdown", shutdown_title, shutdown_message)
+                notification_manager.send_event_notification(
+                    "shutdown", shutdown_title, shutdown_message
+                )
             )
             await asyncio.wait_for(notification_task, timeout=10)
             logger.info("关闭通知已发送")
@@ -165,7 +164,9 @@ async def graceful_shutdown():
             for message_id, status in chat_config.node.download_status.items():
                 if status == DownloadStatus.Downloading:
                     pending_messages.append((message_id, chat_id))
-                    logger.debug(f"记录正在下载的任务: chat_id={chat_id}, message_id={message_id}")
+                    logger.debug(
+                        f"记录正在下载的任务: chat_id={chat_id}, message_id={message_id}"
+                    )
 
     # Record all queued tasks
     try:
@@ -174,7 +175,9 @@ async def graceful_shutdown():
                 message, node = ctx.download_queue.get_nowait()
                 pending_messages.append((message.id, node.chat_id))
                 ctx.download_queue.task_done()
-                logger.debug(f"记录队列中的任务: chat_id={node.chat_id}, message_id={message.id}")
+                logger.debug(
+                    f"记录队列中的任务: chat_id={node.chat_id}, message_id={message.id}"
+                )
             except (asyncio.QueueEmpty, ValueError):
                 break
     except Exception as e:
@@ -197,7 +200,7 @@ async def run_until_all_task_finish():
 
     # Wait for new tasks to complete (producers have finished adding)
     while True:
-        if getattr(app, 'force_exit', False) or not getattr(app, 'is_running', True):
+        if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
             logger.info("收到退出信号，准备退出...")
             break
 
@@ -214,13 +217,11 @@ async def run_until_all_task_finish():
         await asyncio.sleep(1)
 
     # After new tasks complete, keep running (retry producers still active) until exit signal
-    while getattr(app, 'is_running', True) and not getattr(app, 'force_exit', False):
+    while getattr(app, "is_running", True) and not getattr(app, "force_exit", False):
         # Periodic sleep; could add stats logging here
         await asyncio.sleep(10)
 
     logger.info("主运行循环结束")
-
-
 
 
 async def start_server(client: pyrogram.Client):
@@ -268,28 +269,49 @@ async def wait_for_queues_to_empty():
     while time.time() - start_time < max_wait_time:
         try:
             # Prefer empty() over qsize() for accuracy
-            download_queue_size = ctx.download_queue.qsize() if hasattr(ctx.download_queue, 'qsize') else 0
-            notify_queue_size = ctx.notify_queue.qsize() if hasattr(ctx.notify_queue, 'qsize') else 0
+            download_queue_size = (
+                ctx.download_queue.qsize()
+                if hasattr(ctx.download_queue, "qsize")
+                else 0
+            )
+            notify_queue_size = (
+                ctx.notify_queue.qsize() if hasattr(ctx.notify_queue, "qsize") else 0
+            )
 
             logger.debug(f"队列状态: 下载队列={download_queue_size}, 通知队列={notify_queue_size}")
 
             # More accurate emptiness check
-            is_download_queue_empty = ctx.download_queue.empty() if hasattr(ctx.download_queue, 'empty') else (
-                        download_queue_size == 0)
-            is_notify_queue_empty = ctx.notify_queue.empty() if hasattr(ctx.notify_queue, 'empty') else (notify_queue_size == 0)
+            is_download_queue_empty = (
+                ctx.download_queue.empty()
+                if hasattr(ctx.download_queue, "empty")
+                else (download_queue_size == 0)
+            )
+            is_notify_queue_empty = (
+                ctx.notify_queue.empty()
+                if hasattr(ctx.notify_queue, "empty")
+                else (notify_queue_size == 0)
+            )
 
             if is_download_queue_empty and is_notify_queue_empty:
                 # Check unfinished task counter
-                unfinished_download_tasks = ctx.download_queue._unfinished_tasks if hasattr(ctx.download_queue,
-                                                                                        '_unfinished_tasks') else 0
-                unfinished_notify_tasks = ctx.notify_queue._unfinished_tasks if hasattr(ctx.notify_queue,
-                                                                                    '_unfinished_tasks') else 0
+                unfinished_download_tasks = (
+                    ctx.download_queue._unfinished_tasks
+                    if hasattr(ctx.download_queue, "_unfinished_tasks")
+                    else 0
+                )
+                unfinished_notify_tasks = (
+                    ctx.notify_queue._unfinished_tasks
+                    if hasattr(ctx.notify_queue, "_unfinished_tasks")
+                    else 0
+                )
 
                 if unfinished_download_tasks == 0 and unfinished_notify_tasks == 0:
                     logger.info("所有队列已清空")
                     return True
 
-                logger.debug(f"未完成任务: 下载={unfinished_download_tasks}, 通知={unfinished_notify_tasks}")
+                logger.debug(
+                    f"未完成任务: 下载={unfinished_download_tasks}, 通知={unfinished_notify_tasks}"
+                )
 
             await asyncio.sleep(1)
         except Exception as e:
@@ -359,11 +381,11 @@ def main():
         # Initialize Pyrogram client
         client = HookClient(
             "media_downloader",
-            api_id=app.get_config('api_id'),
-            api_hash=app.get_config('api_hash'),
-            proxy=app.get_config('proxy'),
-            workdir=app.get_config('session_file_path'),
-            start_timeout=app.get_config('start_timeout'),
+            api_id=app.get_config("api_id"),
+            api_hash=app.get_config("api_hash"),
+            proxy=app.get_config("proxy"),
+            workdir=app.get_config("session_file_path"),
+            start_timeout=app.get_config("start_timeout"),
         )
 
         # Update queue manager limits
@@ -402,15 +424,21 @@ def main():
 
         # Verify cloud storage connectivity FIRST, before startup notification
         async def verify_cloud():
-            if app.cloud_drive_config.enable_upload_file and app.cloud_drive_config.upload_adapter == "rclone":
+            if (
+                app.cloud_drive_config.enable_upload_file
+                and app.cloud_drive_config.upload_adapter == "rclone"
+            ):
                 from module.cloud_drive import verify_rclone_remote
+
                 cloud_ok, cloud_msg = await verify_rclone_remote(app.cloud_drive_config)
                 if cloud_ok:
                     logger.success(f"☁️  {cloud_msg}")
                 else:
                     ctx.cloud_upload_ok = False
                     logger.error(f"☁️  {cloud_msg}")
-                    await notification_manager.send_event_notification("startup", "☁️ 云端写入验证失败，下载暂停", cloud_msg, "error")
+                    await notification_manager.send_event_notification(
+                        "startup", "☁️ 云端写入验证失败，下载暂停", cloud_msg, "error"
+                    )
                     logger.warning("☁️ 云端写入测试失败：download worker 已暂停，等待云端恢复后自动继续")
 
         app.loop.run_until_complete(verify_cloud())
@@ -420,26 +448,28 @@ def main():
 
         # Set global exception handler
         def global_exception_handler(loop, context):
-            exception = context.get('exception')
+            exception = context.get("exception")
             if exception:
                 logger.error(f"未处理的异常: {exception}")
             logger.error(f"异常上下文: {context}")
 
-            if hasattr(app, 'force_exit') and app.force_exit:
+            if hasattr(app, "force_exit") and app.force_exit:
                 logger.info("强制退出程序中...")
                 sys.exit(1)
 
         app.loop.set_exception_handler(global_exception_handler)
-        set_max_concurrent_transmissions(client, app.get_config('max_concurrent_transmissions'))
+        set_max_concurrent_transmissions(
+            client, app.get_config("max_concurrent_transmissions")
+        )
 
         # Start Pyrogram client
         app.loop.run_until_complete(start_server(client))
         logger.success(_t("Successfully started (Press Ctrl+C to stop)"))
 
         # Set running flags
-        if not hasattr(app, 'force_exit'):
+        if not hasattr(app, "force_exit"):
             app.force_exit = False
-        if not hasattr(app, 'is_running'):
+        if not hasattr(app, "is_running"):
             app.is_running = True
 
         # Step 1: Start all workers
@@ -447,7 +477,10 @@ def main():
         download_tasks = app.loop.run_until_complete(start_download_workers(client))
 
         # Step 2: Start monitor tasks
-        if notification_manager.bark_enabled or notification_manager.synology_chat_enabled:
+        if (
+            notification_manager.bark_enabled
+            or notification_manager.synology_chat_enabled
+        ):
             # Start disk space monitor
             disk_monitor_task_obj = app.loop.create_task(disk_space_monitor_task())
             monitor_tasks.append(disk_monitor_task_obj)
@@ -473,7 +506,7 @@ def main():
         app.loop.run_until_complete(asyncio.sleep(3))
 
         # Step 4: Start bot if configured
-        if app.get_config('bot_token'):
+        if app.get_config("bot_token"):
             logger.info("启动下载机器人...")
             bot_task = app.loop.create_task(
                 start_download_bot(app, client, add_download_task, download_chat_task)
@@ -490,7 +523,7 @@ def main():
 
     except KeyboardInterrupt:
         logger.info(_t("KeyboardInterrupt"))
-        if hasattr(app, 'force_exit'):
+        if hasattr(app, "force_exit"):
             app.force_exit = True
     except Exception as e:
         logger.exception("{}", e)
@@ -511,17 +544,17 @@ def main():
         # Cancel all tasks
         logger.info("取消所有任务...")
         all_tasks = []
-        if 'chat_tasks' in locals():
+        if "chat_tasks" in locals():
             all_tasks.extend(chat_tasks)
-        if 'monitor_tasks' in locals():
+        if "monitor_tasks" in locals():
             all_tasks.extend(monitor_tasks)
-        if 'download_tasks' in locals():
+        if "download_tasks" in locals():
             all_tasks.extend(download_tasks)
-        if 'notify_tasks' in locals():
+        if "notify_tasks" in locals():
             all_tasks.extend(notify_tasks)
 
         for task in all_tasks:
-            if hasattr(task, 'done') and not task.done():
+            if hasattr(task, "done") and not task.done():
                 try:
                     task.cancel()
                 except:
@@ -537,7 +570,8 @@ def main():
         logger.info("当前聊天配置状态:")
         for chat_id, chat_config in app.chat_download_config.items():
             logger.info(
-                f"  - 聊天 {chat_id}: last_read_message_id={getattr(chat_config, 'last_read_message_id', '未设置')}")
+                f"  - 聊天 {chat_id}: last_read_message_id={getattr(chat_config, 'last_read_message_id', '未设置')}"
+            )
 
         logger.info(f"{_t('update config')}......")
         try:
@@ -547,12 +581,14 @@ def main():
                 logger.success(f"{_t('Updated last read message_id to config file')}")
 
                 # Show updated config from app.config
-                if hasattr(app, 'config') and 'chat' in app.config:
+                if hasattr(app, "config") and "chat" in app.config:
                     logger.info("更新后的聊天配置:")
-                    for chat_item in app.config['chat']:
-                        chat_id = chat_item.get('chat_id')
-                        last_id = chat_item.get('last_read_message_id')
-                        logger.info(f"  - chat_id: {chat_id}, last_read_message_id: {last_id}")
+                    for chat_item in app.config["chat"]:
+                        chat_id = chat_item.get("chat_id")
+                        last_id = chat_item.get("last_read_message_id")
+                        logger.info(
+                            f"  - chat_id: {chat_id}, last_read_message_id: {last_id}"
+                        )
                 else:
                     logger.warning("无法获取更新后的配置信息")
             else:
@@ -560,6 +596,7 @@ def main():
         except Exception as e:
             logger.error(f"保存配置时出错: {e}")
             import traceback
+
             logger.error(f"堆栈信息: {traceback.format_exc()}")
 
         # Check config file size
@@ -570,7 +607,7 @@ def main():
         except:
             pass
 
-        if app.get_config('bot_token'):
+        if app.get_config("bot_token"):
             try:
                 app.loop.run_until_complete(stop_download_bot())
             except:
@@ -594,6 +631,7 @@ def main():
 
         # Report remaining failed tasks
         try:
+
             async def get_final_failed_tasks():
                 total = 0
                 for chat_id, _ in app.chat_download_config.items():
@@ -607,7 +645,9 @@ def main():
         except Exception as e:
             logger.error(f"统计失败任务时出错: {e}")
 
-        logger.info(f"队列管理器统计: 添加任务={queue_manager.task_added}, 处理任务={queue_manager.task_processed}")
+        logger.info(
+            f"队列管理器统计: 添加任务={queue_manager.task_added}, 处理任务={queue_manager.task_processed}"
+        )
         logger.info("=" * 60)
 
 
