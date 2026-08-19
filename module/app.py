@@ -130,7 +130,8 @@ class ConfigSchema:
                                   "disk_space_threshold_gb": 10.0,
                                   "space_check_interval": 300,
                                   "stats_notification_interval": 3600,
-                                  "notify_worker_count": 1
+                                  "notify_worker_count": 1,
+                                  "sound": "alarm"
                               },
                               # Synology Chat config
                               "synology_chat": {
