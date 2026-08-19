@@ -147,3 +147,24 @@ def test_synology_sync_http_error_returns_false():
     with _http_ctx(session), mock.patch("services.notifier.asyncio.sleep", new=mock.AsyncMock()):
         ok = asyncio.run(send_synology_chat_notification_sync("t", "m"))
     assert ok is False
+
+
+def test_bark_sync_uses_configured_sound():
+    md.app.bark_notification = {
+        "enabled": True, "url": "https://api.day.app/key", "sound": "silence"
+    }
+    session = _bark_session([200])
+    with _http_ctx(session):
+        ok = asyncio.run(send_bark_notification_sync("t", "b"))
+    assert ok is True
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["sound"] == "silence"
+
+
+def test_bark_sync_default_sound_alarm():
+    md.app.bark_notification = {"enabled": True, "url": "https://api.day.app/key"}
+    session = _bark_session([200])
+    with _http_ctx(session):
+        asyncio.run(send_bark_notification_sync("t", "b"))
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["sound"] == "alarm"

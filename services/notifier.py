@@ -215,16 +215,17 @@ async def send_bark_notification_sync(
     if not url.startswith('http'):
         url = f"https://{url}"
 
-    # Get default group and level from config
+    # Get default group, level and sound from config
     bark_config = getattr(app, 'bark_notification', {})
     default_group = bark_config.get('default_group', 'TelegramDownloader')
     default_level = bark_config.get('default_level', 'active')
+    sound = bark_config.get('sound', 'alarm')
 
     # Build payload
     payload = {
         "title": title[:100],  # Limit title length
         "body": body[:500],  # Limit body length
-        "sound": "alarm",
+        "sound": sound,
         "icon": "https://telegram.org/img/t_logo.png"
     }
 
