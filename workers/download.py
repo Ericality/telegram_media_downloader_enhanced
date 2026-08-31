@@ -332,6 +332,49 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                         logger.info(f"下载Worker {worker_id}: 云端连接恢复，继续下载")
                         disk_monitor.paused_workers.discard(worker_id)
 
+            # Check cloud storage free space (rclone only; unknown -> fail-open, keep downloading)
+            if not getattr(app, "force_exit", False):
+                cloud_cfg = getattr(app, "cloud_drive_config", None)
+                cloud_threshold = getattr(cloud_cfg, "cloud_space_threshold_gb", 10.0)
+                if (
+                    cloud_cfg
+                    and cloud_cfg.enable_upload_file
+                    and cloud_cfg.upload_adapter == "rclone"
+                    and cloud_threshold > 0
+                ):
+                    from module.cloud_drive import check_cloud_space
+
+                    cloud_ok, cloud_free_gb, _ = await check_cloud_space(
+                        cloud_cfg, cloud_threshold
+                    )
+
+                    if cloud_ok is False:
+                        if worker_id not in disk_monitor.paused_workers:
+                            logger.warning(
+                                f"下载Worker {worker_id}: 云端空间不足 ({cloud_free_gb}GB < {cloud_threshold}GB)，暂停下载"
+                            )
+                            disk_monitor.paused_workers.add(worker_id)
+
+                            bark_config = getattr(app, "bark_notification", {})
+                            events_to_notify = bark_config.get("events_to_notify", [])
+                            if "task_paused" in events_to_notify:
+                                message = (
+                                    f"Worker {worker_id}: 因云端空间不足暂停下载\n"
+                                    f"云端可用空间: {cloud_free_gb}GB"
+                                )
+                                await send_bark_notification("下载任务暂停", message)
+
+                        if not getattr(app, "force_exit", False):
+                            await asyncio.sleep(60)
+                            continue
+                        else:
+                            break
+                    elif cloud_ok is True:
+                        if worker_id in disk_monitor.paused_workers:
+                            logger.info(f"下载Worker {worker_id}: 云端空间恢复，继续下载")
+                            disk_monitor.paused_workers.discard(worker_id)
+                    # cloud_ok is None: 查询失败，fail-open，不暂停
+
             # Check disk space (skip if exiting)
             if not getattr(app, "force_exit", False):
                 bark_config = getattr(app, "bark_notification", {})

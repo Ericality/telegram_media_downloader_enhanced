@@ -1,8 +1,13 @@
-"""Tests for rclone remote verification."""
+"""Tests for rclone remote verification and cloud space checks."""
 import asyncio
+import json
 from unittest import mock
 
-from module.cloud_drive import CloudDriveConfig, verify_rclone_remote
+from module.cloud_drive import (
+    CloudDriveConfig,
+    check_cloud_space,
+    verify_rclone_remote,
+)
 
 
 class FakeProc:
@@ -75,3 +80,98 @@ def test_verify_rclone_remote_timeout():
 
     assert ok is False
     assert "超时" in msg
+
+
+def _make_cloud_config(enable=True, threshold=10.0):
+    return CloudDriveConfig(
+        enable_upload_file=enable,
+        upload_adapter="rclone",
+        remote_dir="MyRemote:telegram/downloads",
+        rclone_path="/usr/bin/rclone",
+        cloud_space_threshold_gb=threshold,
+    )
+
+
+def _about_payload(total_gb, used_gb, free_gb=None, has_free=True):
+    data = {
+        "total": int(total_gb * 1024**3),
+        "used": int(used_gb * 1024**3),
+        "trashed": 0,
+        "other": 0,
+        "hasTotal": True,
+        "hasUsed": True,
+        "hasFree": has_free,
+    }
+    if free_gb is not None:
+        data["free"] = int(free_gb * 1024**3)
+    return json.dumps(data).encode()
+
+
+def _about_ok(payload):
+    return lambda cmd, **kwargs: FakeProc(0, stdout=payload)
+
+
+def test_check_cloud_space_enough():
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(_about_payload(100, 80, free_gb=20)),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is True
+    assert free_gb == 20.0
+    assert total_gb == 100.0
+
+
+def test_check_cloud_space_low():
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(_about_payload(100, 95, free_gb=5)),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is False
+    assert free_gb == 5.0
+
+
+def test_check_cloud_space_fallback_total_minus_used():
+    # 部分后端不报告 free 字段 → 用 total - used 估算
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(_about_payload(100, 95, has_free=False)),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is False
+    assert free_gb == 5.0
+    assert total_gb == 100.0
+
+
+def test_check_cloud_space_query_failure_returns_unknown():
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=lambda cmd, **kwargs: FakeProc(1, stderr=b"timeout"),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is None  # fail-open
+    assert free_gb is None
+    assert total_gb is None
+
+
+def test_check_cloud_space_disabled_returns_unknown():
+    has_space, free_gb, total_gb = asyncio.run(
+        check_cloud_space(_make_cloud_config(enable=False), 10.0)
+    )
+
+    assert has_space is None
+    assert free_gb is None
+    assert total_gb is None

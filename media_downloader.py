@@ -40,6 +40,7 @@ from workers.download import (
     download_worker,
 )
 from workers.monitor import (
+    cloud_health_monitor_task,
     disk_monitor,
     disk_space_monitor_task,
     queue_monitor_task,
@@ -496,6 +497,10 @@ def main():
             logger.info("通知系统已启用，监控任务已启动")
         else:
             logger.info("所有通知方式均未启用，跳过监控任务")
+
+        # 云端健康监控：独立于通知系统，负责 cloud_upload_ok 恢复（否则 worker 会永远暂停）
+        cloud_health_task_obj = app.loop.create_task(cloud_health_monitor_task())
+        monitor_tasks.append(cloud_health_task_obj)
 
         # Step 3: Start chat download tasks (async)
         logger.info("启动聊天下载任务...")

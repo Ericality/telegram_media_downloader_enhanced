@@ -5,6 +5,7 @@ from unittest import mock
 import core.context as ctx
 import media_downloader as md
 from core.models import ChatDownloadConfig, DownloadStatus, TaskNode
+from module.cloud_drive import CloudDriveConfig
 from workers.download import download_chat_task, download_worker, retry_producer
 
 from .test_common import MockMessage
@@ -67,6 +68,115 @@ def test_download_worker_pauses_when_cloud_down():
     assert 1 in dm.paused_workers  # 云上传失败 → worker 被暂停
     md.app.is_running = True
     ctx.cloud_upload_ok = True
+
+
+def test_download_worker_pauses_when_cloud_space_low():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.bark_notification = {}
+    ctx.cloud_upload_ok = True
+    ctx.download_semaphore = asyncio.Semaphore(1)
+    ctx.download_queue = asyncio.Queue()
+    md.app.cloud_drive_config = CloudDriveConfig(
+        enable_upload_file=True,
+        upload_adapter="rclone",
+        remote_dir="MyRemote:telegram",
+        cloud_space_threshold_gb=10.0,
+    )
+
+    async def stop_after_sleep(*args, **kwargs):
+        md.app.is_running = False
+
+    with mock.patch("workers.download.disk_monitor") as dm, mock.patch(
+        "workers.download.asyncio.sleep", new=stop_after_sleep
+    ), mock.patch(
+        "workers.download.check_disk_space",
+        new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
+    ), mock.patch(
+        "module.cloud_drive.check_cloud_space",
+        new=mock.AsyncMock(return_value=(False, 5.0, 100.0)),
+    ):
+        dm.paused_workers = set()
+        asyncio.run(download_worker(mock.MagicMock(), 1))
+
+    assert 1 in dm.paused_workers  # 云端空间不足 → worker 被暂停
+    md.app.is_running = True
+    md.app.cloud_drive_config = CloudDriveConfig()
+
+
+def test_download_worker_continues_when_cloud_space_unknown():
+    # 云端空间查询失败 → fail-open，不暂停，正常消费队列
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.bark_notification = {}
+    ctx.cloud_upload_ok = True
+    ctx.download_semaphore = asyncio.Semaphore(1)
+    ctx.download_queue = asyncio.Queue()
+    md.app.cloud_drive_config = CloudDriveConfig(
+        enable_upload_file=True,
+        upload_adapter="rclone",
+        remote_dir="MyRemote:telegram",
+        cloud_space_threshold_gb=10.0,
+    )
+
+    node = TaskNode(chat_id=-123)
+    message = MockMessage(id=5, media=True, chat_id=-123)
+    ctx.download_queue.put_nowait((message, node))
+
+    client = mock.MagicMock()
+    with mock.patch(
+        "workers.download.check_disk_space",
+        new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
+    ), mock.patch(
+        "module.cloud_drive.check_cloud_space",
+        new=mock.AsyncMock(return_value=(None, None, None)),
+    ), mock.patch("workers.download.disk_monitor") as dm, mock.patch(
+        "services.downloader.download_task", new=_fake_download_task
+    ):
+        dm.paused_workers = set()
+        asyncio.run(download_worker(client, 1))
+
+    assert 1 not in dm.paused_workers  # 查询失败不暂停
+    assert ctx.download_queue.empty() is True  # 任务被正常消费
+    md.app.is_running = True
+    md.app.cloud_drive_config = CloudDriveConfig()
+
+
+def test_download_worker_resumes_when_cloud_space_recovers():
+    md.app.is_running = True
+    md.app.force_exit = False
+    md.app.bark_notification = {}
+    ctx.cloud_upload_ok = True
+    ctx.download_semaphore = asyncio.Semaphore(1)
+    ctx.download_queue = asyncio.Queue()
+    md.app.cloud_drive_config = CloudDriveConfig(
+        enable_upload_file=True,
+        upload_adapter="rclone",
+        remote_dir="MyRemote:telegram",
+        cloud_space_threshold_gb=10.0,
+    )
+
+    node = TaskNode(chat_id=-123)
+    message = MockMessage(id=5, media=True, chat_id=-123)
+    ctx.download_queue.put_nowait((message, node))
+
+    client = mock.MagicMock()
+    with mock.patch(
+        "workers.download.check_disk_space",
+        new=mock.AsyncMock(return_value=(True, 20.0, 100.0)),
+    ), mock.patch(
+        "module.cloud_drive.check_cloud_space",
+        new=mock.AsyncMock(return_value=(True, 50.0, 100.0)),
+    ), mock.patch("workers.download.disk_monitor") as dm, mock.patch(
+        "services.downloader.download_task", new=_fake_download_task
+    ):
+        dm.paused_workers = {1}  # 之前因云端空间不足被暂停
+        asyncio.run(download_worker(client, 1))
+
+    assert 1 not in dm.paused_workers  # 云端空间恢复 → 自动继续
+    assert ctx.download_queue.empty() is True
+    md.app.is_running = True
+    md.app.cloud_drive_config = CloudDriveConfig()
 
 
 def test_retry_producer_exits_when_stopped():

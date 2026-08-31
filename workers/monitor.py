@@ -21,11 +21,15 @@ class DiskSpaceMonitor:
 
     def __init__(self):
         self.space_low = False
+        self.cloud_space_low = False
         self.last_check_time = 0
         self.last_notification_time = 0
         self.paused_workers = set()
         self.stats_start_time = datetime.now()
         self.retry_success_count = 0
+        # 云端连接健康重验（cloud_upload_ok 恢复机制）状态
+        self.last_cloud_recheck_time = 0.0
+        self.cloud_recheck_interval = 300
         self.stats_since_last_notification = {
             "tasks_completed": 0,
             "tasks_failed": 0,
@@ -109,40 +113,72 @@ async def disk_space_monitor_task():
             )  # Cap at 5s for fast exit response
 
             has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
+
+            # Cloud storage space check (rclone only; None = unknown -> fail-open)
+            cloud_enabled = (
+                app.cloud_drive_config.enable_upload_file
+                and app.cloud_drive_config.upload_adapter == "rclone"
+            )
+            cloud_ok = None
+            cloud_free_gb = None
+            cloud_total_gb = None
+            cloud_threshold = 10.0
+            if cloud_enabled:
+                cloud_threshold = getattr(
+                    app.cloud_drive_config, "cloud_space_threshold_gb", 10.0
+                )
+                if cloud_threshold > 0:
+                    from module.cloud_drive import check_cloud_space
+
+                    cloud_ok, cloud_free_gb, cloud_total_gb = await check_cloud_space(
+                        app.cloud_drive_config, cloud_threshold
+                    )
+                else:
+                    cloud_enabled = False  # 阈值 0 = 不启用云端空间检查
+
+            # 本地和云端都正常才算恢复；云端查询失败(None)按正常处理(不暂停)
+            both_ok = has_space and (cloud_ok is not False)
+
             current_time = time.time()
             notification_cooldown = 3600
 
-            if not has_space:
+            if not both_ok:
                 disk_monitor.space_low = True
+                if cloud_ok is False:
+                    disk_monitor.cloud_space_low = True
                 if (
                     current_time - disk_monitor.last_notification_time
                 ) > notification_cooldown:
-                    # Query cloud storage space for diagnostics
                     cloud_msg = ""
-                    if (
-                        app.cloud_drive_config.enable_upload_file
-                        and app.cloud_drive_config.upload_adapter == "rclone"
-                    ):
-                        from module.cloud_drive import get_cloud_storage_used
-
-                        cloud_about = await get_cloud_storage_used(
-                            app.cloud_drive_config
+                    if cloud_ok is False:
+                        cloud_msg = (
+                            f"\n云端空间: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
+                            f" (阈值 {cloud_threshold}GB)"
                         )
-                        if cloud_about:
-                            cloud_msg = f"\n云端存储: {cloud_about.replace(chr(10), ' | ')}"
+                    elif cloud_ok is None and cloud_enabled:
+                        cloud_msg = "\n云端空间: 查询失败（本次不暂停）"
                     await notification_manager.send_disk_space_notification(
-                        has_space, available_gb, total_gb, threshold_gb, cloud_msg
+                        both_ok, available_gb, total_gb, threshold_gb, cloud_msg
                     )
                     disk_monitor.last_notification_time = current_time
             else:
-                if disk_monitor.space_low:
+                if disk_monitor.space_low or disk_monitor.cloud_space_low:
                     disk_monitor.space_low = False
+                    disk_monitor.cloud_space_low = False
+                    cloud_msg = ""
+                    if cloud_enabled:
+                        if cloud_ok is not None:
+                            cloud_msg = (
+                                f"\n云端空间: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
+                            )
+                        else:
+                            cloud_msg = "\n云端空间: 查询失败"
                     await notification_manager.send_disk_space_notification(
-                        has_space, available_gb, total_gb, threshold_gb
+                        both_ok, available_gb, total_gb, threshold_gb, cloud_msg
                     )
 
                     if disk_monitor.paused_workers:
-                        logger.info("磁盘空间恢复，准备恢复下载任务...")
+                        logger.info("存储空间恢复，准备恢复下载任务...")
                         disk_monitor.paused_workers.clear()
 
         except Exception as e:
@@ -150,6 +186,52 @@ async def disk_space_monitor_task():
             await asyncio.sleep(60)
 
     logger.info("磁盘空间监控任务已停止")
+
+
+async def cloud_health_monitor_task():
+    """Cloud upload health monitor — re-verify rclone when upload check failed.
+
+    修复隐患：`ctx.cloud_upload_ok` 在启动验证失败后从未恢复，worker 会永远暂停。
+    本任务周期性重跑 rclone 读写验证，成功后把标志翻回 True，worker 自动恢复。
+    独立于通知系统运行（不依赖 bark/synology 是否启用）。
+    """
+    if not (
+        app.cloud_drive_config.enable_upload_file
+        and app.cloud_drive_config.upload_adapter == "rclone"
+    ):
+        return
+
+    logger.info("云端健康监控已启动")
+
+    while getattr(app, "is_running", True) and not getattr(app, "force_exit", False):
+        try:
+            await asyncio.sleep(5)  # Cap at 5s for fast exit response
+
+            if ctx.cloud_upload_ok:
+                continue
+
+            now = time.time()
+            interval = getattr(disk_monitor, "cloud_recheck_interval", 300)
+            if now - disk_monitor.last_cloud_recheck_time < interval:
+                continue
+
+            disk_monitor.last_cloud_recheck_time = now
+            from module.cloud_drive import verify_rclone_remote
+
+            cloud_ok, cloud_msg = await verify_rclone_remote(app.cloud_drive_config)
+            if cloud_ok:
+                ctx.cloud_upload_ok = True
+                logger.success(f"☁️  云端连接恢复: {cloud_msg}")
+                await notification_manager.send_event_notification(
+                    "cloud_recovered", "☁️ 云端连接恢复，下载已继续", cloud_msg, "info"
+                )
+            else:
+                logger.warning(f"☁️  云端仍未恢复: {cloud_msg}")
+        except Exception as e:
+            logger.error(f"云端健康监控任务出错: {e}")
+            await asyncio.sleep(60)
+
+    logger.info("云端健康监控任务已停止")
 
 
 async def stats_notification_task():

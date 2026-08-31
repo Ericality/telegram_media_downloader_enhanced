@@ -510,6 +510,17 @@ class Application:
                     "upload_adapter"
                 ]
 
+            if upload_drive_config.get("cloud_space_threshold_gb") is not None:
+                try:
+                    self.cloud_drive_config.cloud_space_threshold_gb = float(
+                        upload_drive_config["cloud_space_threshold_gb"]
+                    )
+                except (TypeError, ValueError):
+                    logger.warning(
+                        f"cloud_space_threshold_gb 配置无效: "
+                        f"{upload_drive_config.get('cloud_space_threshold_gb')}，使用默认 10.0"
+                    )
+
     def _validate_date_format(self):
         """Validate date format"""
         try:

@@ -33,6 +33,7 @@ class CloudDriveConfig:
         ),
         remote_dir: str = "",
         upload_adapter: str = "rclone",
+        cloud_space_threshold_gb: float = 10.0,
     ):
         self.enable_upload_file = enable_upload_file
         self.before_upload_file_zip = before_upload_file_zip
@@ -40,6 +41,8 @@ class CloudDriveConfig:
         self.rclone_path = rclone_path
         self.remote_dir = remote_dir
         self.upload_adapter = upload_adapter
+        # 云端剩余空间阈值(GB)：剩余空间低于该值时暂停下载；0 = 不启用云端空间检查
+        self.cloud_space_threshold_gb = cloud_space_threshold_gb
         self.dir_cache: dict = {}  # for remote mkdir
         self.total_upload_success_file_count = 0
         self.aligo = None
@@ -190,6 +193,66 @@ async def get_cloud_storage_used(drive_config: CloudDriveConfig) -> Optional[str
     except Exception:
         pass
     return None
+
+
+async def check_cloud_space(
+    drive_config: CloudDriveConfig, threshold_gb: float = 10.0
+) -> tuple:
+    """Check available cloud storage space (rclone adapter only).
+
+    Runs ``rclone about --json`` and reports free space.
+
+    Returns:
+        (has_space, free_gb, total_gb) where:
+        - has_space: bool — free space >= threshold; ``None`` when the query
+          failed or is not applicable (callers should fail open, i.e. not pause).
+        - free_gb / total_gb: float or ``None`` when unknown.
+    """
+    if not drive_config.enable_upload_file or drive_config.upload_adapter != "rclone":
+        return None, None, None
+    try:
+        root = drive_config.remote_dir.split(":")[0] + ":"
+        cmd = f'"{drive_config.rclone_path}" about "{root}/" --json'
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_rclone_env(),
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode != 0 or not out.strip():
+            logger.warning(
+                f"rclone about 查询云端空间失败: returncode={proc.returncode}, stderr 截断={out.strip()[:200]}"
+            )
+            return None, None, None
+
+        data = json.loads(out)
+        total = data.get("total")
+        used = data.get("used")
+        free = data.get("free")
+        has_free = data.get("hasFree", False)
+        has_total = data.get("hasTotal", False)
+
+        total_gb = (
+            round(total / (1024**3), 2) if isinstance(total, (int, float)) else None
+        )
+        if has_free and isinstance(free, (int, float)):
+            free_gb = round(free / (1024**3), 2)
+        elif has_total and isinstance(total, (int, float)) and isinstance(
+            used, (int, float)
+        ):
+            # Fallback: total - used (some backends do not report free)
+            free_gb = round(max(total - used, 0) / (1024**3), 2)
+        else:
+            logger.warning(f"rclone about 输出缺少空间字段: {out.strip()[:200]}")
+            return None, total_gb, None
+
+        threshold_gb = float(threshold_gb)
+        return free_gb >= threshold_gb, free_gb, total_gb
+    except Exception as e:
+        logger.warning(f"检查云端空间失败: {e}")
+        return None, None, None
 
 
 class CloudDrive:

@@ -134,17 +134,25 @@ class NotificationManager:
         threshold_gb: float,
         cloud_extra: str = "",
     ):
-        """Send disk space notification, optionally with cloud storage info."""
+        """Send storage space notification (local + optional cloud info)."""
         if has_space:
-            title = "磁盘空间充足"
-            message = f"✅ 磁盘空间充足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
+            title = "存储空间充足"
+            message = (
+                f"✅ 存储空间充足\n"
+                f"本地磁盘可用: {available_gb:.2f}GB / {total_gb:.2f}GB\n"
+                f"本地阈值: {threshold_gb}GB"
+            )
             level = "info"
         else:
-            title = "磁盘空间不足"
-            message = f"⚠️ 磁盘空间不足\n可用空间: {available_gb:.2f}GB / {total_gb:.2f}GB\n阈值: {threshold_gb}GB"
-            if cloud_extra:
-                message += cloud_extra
+            title = "存储空间不足"
+            message = (
+                f"⚠️ 存储空间不足\n"
+                f"本地磁盘可用: {available_gb:.2f}GB / {total_gb:.2f}GB\n"
+                f"本地阈值: {threshold_gb}GB"
+            )
             level = "warning"
+        if cloud_extra:
+            message += cloud_extra
 
         return await self.send_event_notification("disk_space", title, message, level)
 
