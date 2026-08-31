@@ -57,6 +57,9 @@ def _build_mocks(stack):
         mock.patch("media_downloader.queue_monitor_task", new=mock.AsyncMock())
     )
     stack.enter_context(
+        mock.patch("media_downloader.cloud_health_monitor_task", new=mock.AsyncMock())
+    )
+    stack.enter_context(
         mock.patch("media_downloader.asyncio.sleep", new=mock.AsyncMock())
     )
     stack.enter_context(mock.patch.object(md.app, "update_config", return_value=True))

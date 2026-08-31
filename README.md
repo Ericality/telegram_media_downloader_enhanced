@@ -27,11 +27,11 @@
 
 - 🚀 **Download & notification queue separation** with independent worker pools
 - 🔔 **Dual notification system** — Bark push + Synology Chat bot support
-- 💾 **Disk space monitoring** with auto pause/resume of download workers
+- 💾 **Local & cloud storage space monitoring** with auto pause/resume of download workers
 - 🔄 **Infinite failed-task retry** mechanism with persistent failed-task tracking
 - 🛑 **Graceful shutdown** — records in-flight tasks to retry list on exit
 - 🌐 **Web admin panel** with login authentication
-- ☁️ **Cloud storage upload** (Rclone / Aligo support)
+- ☁️ **Cloud storage upload** (Rclone / Aligo support), auto-pause on cloud outage and resume after recovery
 - 📊 **Statistics & monitoring** with periodic notification reports
 
 ### UI
@@ -172,6 +172,8 @@ upload_drive:
   before_upload_file_zip: True
   # option
   after_upload_file_delete: True
+  # option
+  cloud_space_threshold_gb: 10
 hide_file_name: true
 file_name_prefix:
 - message_id
@@ -210,6 +212,7 @@ enable_download_txt: false
   - `rclone_path` - RClone exe path, see [How to use rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone) (original docs)
   - `before_upload_file_zip` - Zip file before upload, default `false`.
   - `after_upload_file_delete` - Delete file after upload success, default `false`.
+  - `cloud_space_threshold_gb` - Cloud free-space threshold (GB). Downloads pause when remaining cloud space drops below it, default `10`; set `0` to disable cloud space checks (rclone adapter only; a failed query does NOT pause). Downloads also pause on cloud connectivity loss and resume automatically after recovery (recovery notification event: `cloud_recovered` — add it to `events_to_notify` to receive it).
 - **file_name_prefix** - Custom file name, use the same as **file_path_prefix**
   - `message_id` - Message id
   - `file_name` - File name (may be empty)

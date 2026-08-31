@@ -28,11 +28,11 @@
 
 - 🚀 **下载与通知队列分离**，独立 worker 池管理
 - 🔔 **双通知系统** — 支持 Bark 推送 + 群晖 Chat 机器人
-- 💾 **磁盘空间监控**，空间不足自动暂停/恢复下载 worker
+- 💾 **本地/云端空间监控**，空间不足自动暂停/恢复下载 worker
 - 🔄 **无限失败重试**机制，持久化失败任务追踪
 - 🛑 **优雅退出** — 退出时将未完成任务记录到重试列表
 - 🌐 **Web 管理面板**，支持登录认证
-- ☁️ **云存储上传**（Rclone / Aligo 支持）
+- ☁️ **云存储上传**（Rclone / Aligo 支持），云端连接中断自动暂停并在恢复后继续
 - 📊 **统计与监控**，支持定时通知报告
 
 ### 界面
@@ -168,6 +168,7 @@ upload_drive:
   rclone_path: D:\rclone\rclone.exe
   before_upload_file_zip: True
   after_upload_file_delete: True
+  cloud_space_threshold_gb: 10
 hide_file_name: true
 file_name_prefix:
 - message_id
@@ -207,6 +208,7 @@ enable_download_txt: false
   - `rclone_path`，如果配置`upload_adapter`为`rclone`则为必填，`rclone`的可执行目录，查阅 [如何使用rclone](https://github.com/tangyoha/telegram_media_downloader/wiki/Rclone)（原版文档）
   - `before_upload_file_zip` - 上传前压缩文件，默认为`false`
   - `after_upload_file_delete` - 上传成功后删除文件，默认为`false`
+  - `cloud_space_threshold_gb` - 云端剩余空间阈值（GB），剩余空间低于该值时暂停下载，默认`10`；设为`0`则不启用云端空间检查（仅`rclone`适配器有效，查询失败不暂停）。云端连接中断时也会暂停下载，恢复后自动继续（恢复通知事件为`cloud_recovered`，如需推送请加入`events_to_notify`）
 - **file_name_prefix** - 自定义文件名称,使用和 **file_path_prefix** 一样
   - `message_id` - 消息id
   - `file_name` - 文件名称（可能为空）

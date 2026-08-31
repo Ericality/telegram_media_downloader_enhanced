@@ -229,6 +229,10 @@ def print_config_summary(app):
         logger.info(f"  远程目录: {app.cloud_drive_config.remote_dir}")
         logger.info(f"  上传前压缩: {app.cloud_drive_config.before_upload_file_zip}")
         logger.info(f"  上传后删除: {app.cloud_drive_config.after_upload_file_delete}")
+        logger.info(
+            f"  云端空间阈值: {app.cloud_drive_config.cloud_space_threshold_gb}GB"
+            f"{' (0=不启用)' if app.cloud_drive_config.cloud_space_threshold_gb == 0 else ''}"
+        )
 
     # Other config
     logger.info("\n其他配置:")
