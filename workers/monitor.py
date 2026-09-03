@@ -91,6 +91,21 @@ async def disk_space_monitor_task():
 
     logger.info(f"磁盘空间监控已启动，阈值: {threshold_gb}GB，检查间隔: {check_interval}秒")
 
+    # 云端空间检查启用总览（帮助确认策略是否生效）
+    cloud_cfg = app.cloud_drive_config
+    cloud_enabled_launch = bool(
+        cloud_cfg.enable_upload_file
+        and cloud_cfg.upload_adapter == "rclone"
+        and cloud_cfg.cloud_space_threshold_gb > 0
+    )
+    logger.info(
+        f"云端空间检查: 启用={cloud_enabled_launch} "
+        f"(enable_upload_file={cloud_cfg.enable_upload_file}, "
+        f"adapter={cloud_cfg.upload_adapter!r}, "
+        f"cloud_space_threshold_gb={cloud_cfg.cloud_space_threshold_gb}GB; "
+        f"需 enable_upload_file=true 且 adapter=rclone 且阈值>0 才启用，未配置该项默认 10GB)"
+    )
+
     # Run one check immediately on startup
     try:
         has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
@@ -138,6 +153,16 @@ async def disk_space_monitor_task():
 
             # 本地和云端都正常才算恢复；云端查询失败(None)按正常处理(不暂停)
             both_ok = has_space and (cloud_ok is not False)
+
+            logger.debug(
+                f"存储监控判定: 本地={'充足' if has_space else '不足'}"
+                f"(free={available_gb}GB/total={total_gb}GB, 阈值={threshold_gb}GB), "
+                f"云端检查={'启用' if cloud_enabled else '未启用'}, "
+                f"云端={'充足' if cloud_ok is True else ('不足' if cloud_ok is False else '未知/失败')}"
+                f"{'' if cloud_free_gb is None else f' (free={cloud_free_gb}GB/total={cloud_total_gb}GB, 阈值={cloud_threshold}GB)'}, "
+                f"综合={'正常' if both_ok else '不足'}, "
+                f"space_low={disk_monitor.space_low}, cloud_space_low={disk_monitor.cloud_space_low}"
+            )
 
             current_time = time.time()
             notification_cooldown = 3600

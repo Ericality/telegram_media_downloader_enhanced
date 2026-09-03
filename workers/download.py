@@ -336,12 +336,19 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
             if not getattr(app, "force_exit", False):
                 cloud_cfg = getattr(app, "cloud_drive_config", None)
                 cloud_threshold = getattr(cloud_cfg, "cloud_space_threshold_gb", 10.0)
-                if (
+                cloud_check_enabled = bool(
                     cloud_cfg
                     and cloud_cfg.enable_upload_file
                     and cloud_cfg.upload_adapter == "rclone"
                     and cloud_threshold > 0
-                ):
+                )
+                logger.debug(
+                    f"下载Worker {worker_id}: 云端空间检查启用={cloud_check_enabled} "
+                    f"(enable_upload_file={getattr(cloud_cfg, 'enable_upload_file', None)!r}, "
+                    f"adapter={getattr(cloud_cfg, 'upload_adapter', None)!r}, "
+                    f"threshold={cloud_threshold}GB)"
+                )
+                if cloud_check_enabled:
                     from module.cloud_drive import check_cloud_space
 
                     cloud_ok, cloud_free_gb, _ = await check_cloud_space(
@@ -373,7 +380,12 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                         if worker_id in disk_monitor.paused_workers:
                             logger.info(f"下载Worker {worker_id}: 云端空间恢复，继续下载")
                             disk_monitor.paused_workers.discard(worker_id)
-                    # cloud_ok is None: 查询失败，fail-open，不暂停
+                    else:
+                        # cloud_ok is None: 查询失败，fail-open，不暂停
+                        logger.warning(
+                            f"下载Worker {worker_id}: 云端空间查询失败/不可用(fail-open)，本次不因云端空间暂停；"
+                            f"将按本地磁盘空间继续判定"
+                        )
 
             # Check disk space (skip if exiting)
             if not getattr(app, "force_exit", False):
