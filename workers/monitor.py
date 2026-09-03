@@ -22,6 +22,9 @@ class DiskSpaceMonitor:
     def __init__(self):
         self.space_low = False
         self.cloud_space_low = False
+        # 当前不足周期是否已发过首条响铃通知；恢复时重置。
+        # 不足通知规则：首条响铃(默认level)，冷却后重复通知静音(passive)，恢复通知响铃。
+        self.space_low_first_notified = False
         self.last_check_time = 0
         self.last_notification_time = 0
         self.paused_workers = set()
@@ -177,19 +180,32 @@ async def disk_space_monitor_task():
                     cloud_msg = ""
                     if cloud_ok is False:
                         cloud_msg = (
-                            f"\n云端空间: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
+                            f"\n云端空间不足: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
                             f" (阈值 {cloud_threshold}GB)"
                         )
                     elif cloud_ok is None and cloud_enabled:
                         cloud_msg = "\n云端空间: 查询失败（本次不暂停）"
+                    # 首条不足通知响铃，问题持续期间的重复通知静音(passive)
+                    first_low = not disk_monitor.space_low_first_notified
+                    if first_low:
+                        disk_monitor.space_low_first_notified = True
+                        logger.info("空间不足首条通知已发送(响铃)，后续持续期间通知将静音")
+                    bark_level = None if first_low else "passive"
                     await notification_manager.send_disk_space_notification(
-                        both_ok, available_gb, total_gb, threshold_gb, cloud_msg
+                        both_ok,
+                        available_gb,
+                        total_gb,
+                        threshold_gb,
+                        cloud_msg,
+                        bark_level=bark_level,
                     )
                     disk_monitor.last_notification_time = current_time
             else:
                 if disk_monitor.space_low or disk_monitor.cloud_space_low:
                     disk_monitor.space_low = False
                     disk_monitor.cloud_space_low = False
+                    # 问题解决：重置首条标记，恢复通知响铃
+                    disk_monitor.space_low_first_notified = False
                     cloud_msg = ""
                     if cloud_enabled:
                         if cloud_ok is not None:
@@ -199,7 +215,12 @@ async def disk_space_monitor_task():
                         else:
                             cloud_msg = "\n云端空间: 查询失败"
                     await notification_manager.send_disk_space_notification(
-                        both_ok, available_gb, total_gb, threshold_gb, cloud_msg
+                        both_ok,
+                        available_gb,
+                        total_gb,
+                        threshold_gb,
+                        cloud_msg,
+                        bark_level=None,
                     )
 
                     if disk_monitor.paused_workers:
