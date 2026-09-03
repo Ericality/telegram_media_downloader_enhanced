@@ -1,4 +1,7 @@
 """Tests for NotificationManager."""
+import asyncio
+from unittest import mock
+
 import media_downloader as md
 from services.notifier import NotificationManager
 
@@ -73,3 +76,51 @@ def test_should_notify_any_channel_no_match():
     nm = NotificationManager()
     nm.load_config()
     assert nm.should_notify("startup") is False
+
+
+def test_send_disk_space_notification_bark_level_passive():
+    md.app.notifications = {
+        "bark": {
+            "enabled": True,
+            "events_to_notify": ["disk_space"],
+            "default_level": "active",
+        },
+        "synology_chat": {"enabled": False, "events_to_notify": []},
+        "global": {},
+    }
+    nm = NotificationManager()
+    nm.load_config()
+    nm.send_event_notification = mock.AsyncMock(return_value=True)
+    asyncio.run(
+        nm.send_disk_space_notification(
+            False, 5.0, 100.0, 10.0, "\n云端空间不足: 剩余 5.0GB", bark_level="passive"
+        )
+    )
+    call = nm.send_event_notification.call_args
+    # Bark 通道应收到 passive（静音），Synology 通道保持 warning
+    assert call.args[4]["bark"]["level"] == "passive"
+    assert "存储空间不足" in call.args[1]
+    assert "云端空间不足" in call.args[2]
+
+
+def test_send_disk_space_notification_bark_level_default_when_none():
+    md.app.notifications = {
+        "bark": {
+            "enabled": True,
+            "events_to_notify": ["disk_space"],
+            "default_level": "active",
+        },
+        "synology_chat": {"enabled": False, "events_to_notify": []},
+        "global": {},
+    }
+    nm = NotificationManager()
+    nm.load_config()
+    nm.send_event_notification = mock.AsyncMock(return_value=True)
+    # bark_level=None（首条/恢复）→ 用 Bark 配置的 default_level（active=响铃）
+    asyncio.run(
+        nm.send_disk_space_notification(
+            False, 5.0, 100.0, 10.0, "\n云端空间不足: 剩余 5.0GB", bark_level=None
+        )
+    )
+    call = nm.send_event_notification.call_args
+    assert call.args[4]["bark"]["level"] == "active"

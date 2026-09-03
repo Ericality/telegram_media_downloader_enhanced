@@ -133,8 +133,15 @@ class NotificationManager:
         total_gb: float,
         threshold_gb: float,
         cloud_extra: str = "",
+        bark_level: str = None,
     ):
-        """Send storage space notification (local + optional cloud info)."""
+        """Send storage space notification (local + optional cloud info).
+
+        bark_level controls the Bark sound/level only (valid Bark values:
+        ``active``/``timeSensitive``/``passive``; ``None`` = use the Bark
+        default_level from config, normally the ringing ``active``). Synology
+        Chat keeps the generic info/warning level.
+        """
         if has_space:
             title = "存储空间充足"
             message = (
@@ -154,7 +161,13 @@ class NotificationManager:
         if cloud_extra:
             message += cloud_extra
 
-        return await self.send_event_notification("disk_space", title, message, level)
+        # Bark-only level override (do not leak info/warning into Bark's level)
+        bark_override = bark_level or self.bark_config.get("default_level", "active")
+        custom_config = {"bark": {"level": bark_override}}
+
+        return await self.send_event_notification(
+            "disk_space", title, message, level, custom_config
+        )
 
     async def send_queue_notification(
         self, current_size: int, capacity: int, wait_time_minutes: int = None
