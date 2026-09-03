@@ -243,21 +243,28 @@ async def check_cloud_space(
         used = data.get("used")
         free = data.get("free")
         has_free = data.get("hasFree", False)
-        has_total = data.get("hasTotal", False)
 
+        # rclone about --json 的 hasFree/hasTotal 是可选字段，许多后端(如 OneDrive)
+        # 只输出 total/used/trashed/free。free>0 即可信，无需等 hasFree 标志。
         total_gb = (
-            round(total / (1024**3), 2) if isinstance(total, (int, float)) else None
+            round(total / (1024**3), 2)
+            if isinstance(total, (int, float)) and total > 0
+            else None
         )
-        if has_free and isinstance(free, (int, float)):
+        if isinstance(free, (int, float)) and free > 0:
             free_gb = round(free / (1024**3), 2)
-        elif has_total and isinstance(total, (int, float)) and isinstance(
+        elif isinstance(free, (int, float)) and free == 0 and has_free is True:
+            # 后端明确报告配额已用满 (hasFree:true, free:0)
+            free_gb = 0.0
+        elif isinstance(total, (int, float)) and isinstance(
             used, (int, float)
-        ):
-            # Fallback: total - used (some backends do not report free)
+        ) and total > 0:
+            # Fallback: total - used（后端不报告 free；或 hasFree:false/free:0 =
+            # 无配额限制，此时 total-used 为大值 → 视为充足）
             free_gb = round(max(total - used, 0) / (1024**3), 2)
         else:
             logger.warning(f"[cloud-space] rclone about 输出缺少空间字段: {out.strip()[:300]}")
-            return None, total_gb, None
+            return None, None, None
 
         threshold_gb = float(threshold_gb)
         has_space = free_gb >= threshold_gb

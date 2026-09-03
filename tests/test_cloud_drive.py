@@ -175,3 +175,78 @@ def test_check_cloud_space_disabled_returns_unknown():
     assert has_space is None
     assert free_gb is None
     assert total_gb is None
+
+
+def test_check_cloud_space_onedrive_output_without_has_flags():
+    # OneDrive 实测输出：只有 total/used/trashed/free，没有 hasFree/hasTotal 字段
+    payload = json.dumps(
+        {
+            "total": 1104880336896,  # 1029.0 GB
+            "used": 1099082131047,
+            "trashed": 0,
+            "free": 5798205849,  # ~5.4 GB（配额接近用满）
+        }
+    ).encode()
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(payload),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(threshold=50.0), 50.0)
+        )
+
+    assert has_space is False  # 5.4GB < 50GB → 应判定不足
+    assert free_gb == 5.4
+    assert total_gb == 1029.0
+
+
+def test_check_cloud_space_quota_full_has_free_true():
+    # 明确报告配额用满：hasFree:true, free:0
+    payload = json.dumps(
+        {
+            "total": int(100 * 1024**3),
+            "used": int(100 * 1024**3),
+            "trashed": 0,
+            "free": 0,
+            "hasTotal": True,
+            "hasUsed": True,
+            "hasFree": True,
+        }
+    ).encode()
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(payload),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is False
+    assert free_gb == 0.0
+    assert total_gb == 100.0
+
+
+def test_check_cloud_space_unlimited_backend_has_free_false_zero():
+    # 无配额后端：hasFree:false, free:0 → 走 total-used 兜底，视为充足
+    payload = json.dumps(
+        {
+            "total": int(1000 * 1024**3),
+            "used": int(10 * 1024**3),
+            "trashed": 0,
+            "free": 0,
+            "hasTotal": True,
+            "hasUsed": True,
+            "hasFree": False,
+        }
+    ).encode()
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell",
+        side_effect=_about_ok(payload),
+    ):
+        has_space, free_gb, total_gb = asyncio.run(
+            check_cloud_space(_make_cloud_config(), 10.0)
+        )
+
+    assert has_space is True
+    assert free_gb == 990.0
+    assert total_gb == 1000.0
