@@ -209,7 +209,15 @@ async def check_cloud_space(
         - free_gb / total_gb: float or ``None`` when unknown.
     """
     if not drive_config.enable_upload_file or drive_config.upload_adapter != "rclone":
+        logger.debug(
+            f"[cloud-space] 跳过云端空间检查: enable_upload_file={drive_config.enable_upload_file}, "
+            f"upload_adapter={drive_config.upload_adapter!r}"
+        )
         return None, None, None
+    logger.debug(
+        f"[cloud-space] 检查云端空间: remote={drive_config.remote_dir!r}, "
+        f"rclone={drive_config.rclone_path!r}, threshold={threshold_gb}GB"
+    )
     try:
         root = drive_config.remote_dir.split(":")[0] + ":"
         cmd = f'"{drive_config.rclone_path}" about "{root}/" --json'
@@ -219,11 +227,14 @@ async def check_cloud_space(
             stderr=asyncio.subprocess.PIPE,
             env=_rclone_env(),
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         out = stdout.decode(errors="replace") if stdout else ""
+        err = stderr.decode(errors="replace") if stderr else ""
+        logger.debug(f"[cloud-space] rclone about 原始输出: {out.strip()[:300]}")
         if proc.returncode != 0 or not out.strip():
             logger.warning(
-                f"rclone about 查询云端空间失败: returncode={proc.returncode}, stderr 截断={out.strip()[:200]}"
+                f"[cloud-space] rclone about 查询云端空间失败: returncode={proc.returncode}, "
+                f"stderr={err.strip()[:300]!r}"
             )
             return None, None, None
 
@@ -245,13 +256,20 @@ async def check_cloud_space(
             # Fallback: total - used (some backends do not report free)
             free_gb = round(max(total - used, 0) / (1024**3), 2)
         else:
-            logger.warning(f"rclone about 输出缺少空间字段: {out.strip()[:200]}")
+            logger.warning(f"[cloud-space] rclone about 输出缺少空间字段: {out.strip()[:300]}")
             return None, total_gb, None
 
         threshold_gb = float(threshold_gb)
-        return free_gb >= threshold_gb, free_gb, total_gb
+        has_space = free_gb >= threshold_gb
+        logger.debug(
+            f"[cloud-space] 解析结果: free={free_gb}GB, total={total_gb}GB, "
+            f"used={round(used / (1024**3), 2) if isinstance(used, (int, float)) else None}GB, "
+            f"has_free={has_free}, threshold={threshold_gb}GB -> "
+            f"{'充足' if has_space else '不足'}"
+        )
+        return has_space, free_gb, total_gb
     except Exception as e:
-        logger.warning(f"检查云端空间失败: {e}")
+        logger.warning(f"[cloud-space] 检查云端空间异常: {e}")
         return None, None, None
 
 
