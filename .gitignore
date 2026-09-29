@@ -73,3 +73,12 @@ data.yaml
 
 # 本地私有重构计划与阶段总结（不提交 GitHub）
 refactor/
+
+# ===== 运行期 / 敏感数据：一律不入库（2026-09-30 token 泄漏事故后补）=====
+sessions/
+config.yaml.backup.*
+*.backup.*
+module/failed_tasks.json
+duplicate_count.json
+seen_media.json
+failed_tasks.json
