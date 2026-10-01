@@ -4,7 +4,7 @@
 PyYAML>=5.3.1
 rich==12.5.1
 PyTgCrypto>=1.2.12
-loguru==0.6.0
+loguru==0.7.3
 # aligo==5.4.0
 # Flask 3.0.0 起才要求 Werkzeug>=3.0.0；2.2.x/2.3.x 只声明下限无上限，
 # 单独升 Werkzeug 会让 flask 2.2.2 import 失败(url_quote) ⇒ 两者必须成对升。
