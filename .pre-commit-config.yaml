@@ -23,7 +23,9 @@ repos:
         entry: isort
         types: [python]
         args: ["--profile", "black", "--filter-files"]
-# mypy / pylint 暂从 CI 中移除：
+# mypy / pylint 已从本仓库完全移除（2026-10-01）：
 # - mypy 对历史代码（无完整类型标注）产生 200+ 误报
 # - pylint 的 cyclic-import 无法识别重构中有意的延迟导入解耦
-# 本地可选运行：make static_type_check / make pylint
+#   （且 pylintrc 用 pylint 2.x 的 [MASTER] 段名，与 pylint 3+ 不兼容）
+# ⇒ 二者连同只为 mypy 服务的 types-PyYAML 一起从 dev-requirements.txt 与
+#   Makefile 目标中删除；需要静态检查时自行临时安装。

@@ -7,3 +7,8 @@ updates:
     time: "12:00"
     timezone: CET
   open-pull-requests-limit: 10
+  ignore:
+  # 这两个包没有安全驱动、且升级会牵动日志/控制台渲染，暂不跟进
+  # （想升级时删掉对应行即可，Dependabot 下轮会重新提 PR）
+  - dependency-name: "rich"
+  - dependency-name: "loguru"

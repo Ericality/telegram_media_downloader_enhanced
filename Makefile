@@ -1,6 +1,6 @@
 TEST_ARTIFACTS ?= /tmp/coverage
 
-.PHONY: install dev_install static_type_check pylint style_check test
+.PHONY: install dev_install test
 
 install:
 	python3 -m pip install --upgrade pip setuptools
@@ -9,14 +9,6 @@ install:
 
 dev_install: install
 	python3 -m pip install -r dev-requirements.txt
-
-static_type_check:
-	mypy media_downloader.py utils module core services workers main --ignore-missing-imports
-
-pylint:
-	pylint media_downloader.py utils module core services workers main -r y
-
-style_check: static_type_check pylint
 
 test:
 	py.test --cov=core --cov=services --cov=workers --cov=media_downloader \
