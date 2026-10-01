@@ -1,6 +1,6 @@
 # 与 .pre-commit-config.yaml 的 rev 对齐：本地格式化必须与 CI 钩子同版本，
 # 否则本地 black 产出的风格会被 CI 钩子改写 ⇒ Code Quality 假红
-black==22.3.0
+black==26.5.1
 isort==5.12.0
 mock==4.0.3
 pre-commit==2.20.0
