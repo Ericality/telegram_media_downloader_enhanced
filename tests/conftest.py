@@ -86,10 +86,15 @@ def _reset_app_runtime_flags():
     worker tests that run afterwards see the exit signal and skip their loop
     bodies. Worker/monitor tasks check these flags, so tests must start from a
     clean "running" state.
+
+    ``disk_monitor.cloud_space_cache`` (上次成功查询到的云端空间) is process-global
+    state as well: a test that leaves a "云端空间不足" cache behind would make the
+    next test's worker pause on it. Reset it here so each test starts clean.
     """
     from core.context import app
+    from workers.monitor import disk_monitor
 
     app.is_running = True
     app.force_exit = False
+    disk_monitor.cloud_space_cache = None
     yield
-

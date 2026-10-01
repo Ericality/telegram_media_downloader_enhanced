@@ -19,7 +19,14 @@ from module.pyrogram_extension import get_extension, set_meta_data, upload_teleg
 from services.notifier import send_bark_notification
 from utils.format import truncate_filename, validate_title
 from utils.meta_data import MetaData
-from workers.monitor import check_disk_space, disk_monitor
+from workers.monitor import (
+    CLOUD_SOURCE_CACHE,
+    check_disk_space,
+    cloud_space_check_enabled,
+    disk_monitor,
+    format_age,
+    resolve_cloud_space,
+)
 
 
 def _check_download_finish(media_size: int, download_path: str, ui_file_name: str):
@@ -336,12 +343,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
             if not getattr(app, "force_exit", False):
                 cloud_cfg = getattr(app, "cloud_drive_config", None)
                 cloud_threshold = getattr(cloud_cfg, "cloud_space_threshold_gb", 10.0)
-                cloud_check_enabled = bool(
-                    cloud_cfg
-                    and cloud_cfg.enable_upload_file
-                    and cloud_cfg.upload_adapter == "rclone"
-                    and cloud_threshold > 0
-                )
+                cloud_check_enabled = cloud_space_check_enabled(cloud_cfg)
                 logger.debug(
                     f"下载Worker {worker_id}: 云端空间检查启用={cloud_check_enabled} "
                     f"(enable_upload_file={getattr(cloud_cfg, 'enable_upload_file', None)!r}, "
@@ -349,16 +351,26 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                     f"threshold={cloud_threshold}GB)"
                 )
                 if cloud_check_enabled:
-                    from module.cloud_drive import check_cloud_space
-
-                    cloud_ok, cloud_free_gb, _ = await check_cloud_space(
-                        cloud_cfg, cloud_threshold
-                    )
+                    # 查询失败时沿用上次成功结果（仅上传启用时参与判定）
+                    (
+                        cloud_ok,
+                        cloud_free_gb,
+                        _,
+                        cloud_source,
+                        cloud_age,
+                    ) = await resolve_cloud_space(cloud_cfg, float(cloud_threshold))
 
                     if cloud_ok is False:
                         if worker_id not in disk_monitor.paused_workers:
+                            source_hint = (
+                                f"（查询失败，沿用 {format_age(cloud_age)}前的查询结果）"
+                                if cloud_source == CLOUD_SOURCE_CACHE
+                                else ""
+                            )
                             logger.warning(
-                                f"下载Worker {worker_id}: 云端空间不足 ({cloud_free_gb}GB < {cloud_threshold}GB)，暂停下载"
+                                f"下载Worker {worker_id}: 云端空间不足 "
+                                f"({cloud_free_gb}GB < {cloud_threshold}GB)"
+                                f"{source_hint}，暂停下载"
                             )
                             disk_monitor.paused_workers.add(worker_id)
 
@@ -367,7 +379,7 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                             if "task_paused" in events_to_notify:
                                 message = (
                                     f"Worker {worker_id}: 因云端空间不足暂停下载\n"
-                                    f"云端可用空间: {cloud_free_gb}GB"
+                                    f"云端可用空间: {cloud_free_gb}GB{source_hint}"
                                 )
                                 await send_bark_notification("下载任务暂停", message)
 
@@ -381,10 +393,10 @@ async def download_worker(client: pyrogram.client.Client, worker_id: int):
                             logger.info(f"下载Worker {worker_id}: 云端空间恢复，继续下载")
                             disk_monitor.paused_workers.discard(worker_id)
                     else:
-                        # cloud_ok is None: 查询失败，fail-open，不暂停
+                        # cloud_ok is None: 查询失败且无历史结果，fail-open，不暂停
                         logger.warning(
-                            f"下载Worker {worker_id}: 云端空间查询失败/不可用(fail-open)，本次不因云端空间暂停；"
-                            f"将按本地磁盘空间继续判定"
+                            f"下载Worker {worker_id}: 云端空间查询失败且无历史结果(fail-open)，"
+                            f"本次不因云端空间暂停；将按本地磁盘空间继续判定"
                         )
 
             # Check disk space (skip if exiting)

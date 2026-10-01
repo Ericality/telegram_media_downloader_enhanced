@@ -256,9 +256,11 @@ async def check_cloud_space(
         elif isinstance(free, (int, float)) and free == 0 and has_free is True:
             # 后端明确报告配额已用满 (hasFree:true, free:0)
             free_gb = 0.0
-        elif isinstance(total, (int, float)) and isinstance(
-            used, (int, float)
-        ) and total > 0:
+        elif (
+            isinstance(total, (int, float))
+            and isinstance(used, (int, float))
+            and total > 0
+        ):
             # Fallback: total - used（后端不报告 free；或 hasFree:false/free:0 =
             # 无配额限制，此时 total-used 为大值 → 视为充足）
             free_gb = round(max(total - used, 0) / (1024**3), 2)

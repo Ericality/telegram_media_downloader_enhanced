@@ -3,11 +3,7 @@ import asyncio
 import json
 from unittest import mock
 
-from module.cloud_drive import (
-    CloudDriveConfig,
-    check_cloud_space,
-    verify_rclone_remote,
-)
+from module.cloud_drive import CloudDriveConfig, check_cloud_space, verify_rclone_remote
 
 
 class FakeProc:

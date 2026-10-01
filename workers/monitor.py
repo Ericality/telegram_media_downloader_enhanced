@@ -30,6 +30,10 @@ class DiskSpaceMonitor:
         self.paused_workers = set()
         self.stats_start_time = datetime.now()
         self.retry_success_count = 0
+        # 上次「成功」查询到的云端空间: (free_gb, total_gb, 时间戳)。
+        # 用途: 云端空间查询失败时沿用该结果判定，避免"查不到就当空间充足"。
+        # 仅在上传启用(rclone + 阈值>0)时才写入/读取；未启用上传时不得参与判定。
+        self.cloud_space_cache = None
         # 云端连接健康重验（cloud_upload_ok 恢复机制）状态
         self.last_cloud_recheck_time = 0.0
         self.cloud_recheck_interval = 300
@@ -65,6 +69,117 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
         return False, 0, 0
 
 
+# 云端空间判定来源
+CLOUD_SOURCE_LIVE = "live"
+CLOUD_SOURCE_CACHE = "cache"
+CLOUD_SOURCE_UNKNOWN = "unknown"
+
+
+def cloud_space_check_enabled(drive_config) -> bool:
+    """云端空间检查是否启用: 必须开启上传 + rclone 适配器 + 阈值 > 0。
+
+    未启用上传时不得做云端空间判定 —— 否则会拦截正常下载。
+    """
+    if drive_config is None:
+        return False
+    if not getattr(drive_config, "enable_upload_file", False):
+        return False
+    if getattr(drive_config, "upload_adapter", None) != "rclone":
+        return False
+    try:
+        return float(getattr(drive_config, "cloud_space_threshold_gb", 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _cached_cloud_space():
+    """读取上次成功查询的云端空间，返回 (free_gb, total_gb, age_seconds) 或 None。"""
+    cached = getattr(disk_monitor, "cloud_space_cache", None)
+    if not isinstance(cached, tuple) or len(cached) != 3:
+        return None
+    free_gb, total_gb, ts = cached
+    if isinstance(free_gb, bool) or not isinstance(free_gb, (int, float)):
+        return None
+    if isinstance(ts, bool) or not isinstance(ts, (int, float)):
+        return None
+    return float(free_gb), total_gb, max(time.time() - float(ts), 0.0)
+
+
+def format_age(seconds: float) -> str:
+    """把秒数格式化成可读的中文时长。"""
+    if seconds < 90:
+        return f"{int(seconds)} 秒"
+    if seconds < 3600:
+        return f"{seconds / 60:.0f} 分钟"
+    if seconds < 86400:
+        return f"{seconds / 3600:.1f} 小时"
+    return f"{seconds / 86400:.1f} 天"
+
+
+async def resolve_cloud_space(drive_config, threshold_gb: float) -> tuple:
+    """查询云端剩余空间；查询失败时沿用上次成功查询的结果。
+
+    背景: ``rclone about`` 失败时旧实现返回 ``None``，调用方一律按"充足"处理
+    ⇒ 会误发"存储空间充足"通知并继续下载。现在的口径是"查不到就用上次查到的值"，
+    且该行为只在云端空间检查启用(上传开启 + rclone + 阈值>0)时才有意义。
+
+    Returns:
+        (ok, free_gb, total_gb, source, age_seconds)
+        - ok: ``True``/``False`` = 判定结果；``None`` = 查不到且没有历史成功结果
+          （调用方 fail-open，不因云端空间暂停）。
+        - source: ``"live"`` / ``"cache"`` / ``"unknown"``。
+        - age_seconds: ``source == "cache"`` 时为上次成功查询距今秒数，否则 ``0.0``。
+    """
+    from module.cloud_drive import check_cloud_space
+
+    threshold_gb = float(threshold_gb)
+    ok, free_gb, total_gb = await check_cloud_space(drive_config, threshold_gb)
+
+    if ok is not None:
+        disk_monitor.cloud_space_cache = (
+            float(free_gb) if isinstance(free_gb, (int, float)) else free_gb,
+            total_gb,
+            time.time(),
+        )
+        return ok, free_gb, total_gb, CLOUD_SOURCE_LIVE, 0.0
+
+    cached = _cached_cloud_space()
+    if cached is not None:
+        cached_free_gb, cached_total_gb, age = cached
+        cached_ok = cached_free_gb >= threshold_gb
+        logger.warning(
+            f"[cloud-space] 查询失败，沿用上次成功结果({format_age(age)}前): "
+            f"free={cached_free_gb}GB/total={cached_total_gb}GB，阈值={threshold_gb}GB -> "
+            f"{'充足' if cached_ok else '不足'}"
+        )
+        return (
+            cached_ok,
+            cached_free_gb,
+            cached_total_gb,
+            CLOUD_SOURCE_CACHE,
+            age,
+        )
+
+    logger.warning("[cloud-space] 查询失败且无历史成功结果 -> 本次不因云端空间暂停(fail-open)")
+    return None, None, None, CLOUD_SOURCE_UNKNOWN, 0.0
+
+
+async def _sleep_with_exit_check(seconds: float) -> bool:
+    """分片睡眠并保持对退出信号的响应；返回 ``False`` 表示收到退出信号。
+
+    旧实现写成 ``asyncio.sleep(min(check_interval, 5))``，把配置的检查间隔(默认 300 秒)
+    压成了固定 5 秒 —— 每 5 秒跑一次 ``rclone about``，既增加失败率也造成通知抖动。
+    """
+    remaining = float(seconds)
+    while remaining > 0:
+        if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
+            return False
+        step = min(remaining, 1.0)
+        await asyncio.sleep(step)
+        remaining -= step
+    return True
+
+
 async def disk_space_monitor_task():
     """Disk space monitor task."""
     # Check if notification system is enabled
@@ -96,11 +211,7 @@ async def disk_space_monitor_task():
 
     # 云端空间检查启用总览（帮助确认策略是否生效）
     cloud_cfg = app.cloud_drive_config
-    cloud_enabled_launch = bool(
-        cloud_cfg.enable_upload_file
-        and cloud_cfg.upload_adapter == "rclone"
-        and cloud_cfg.cloud_space_threshold_gb > 0
-    )
+    cloud_enabled_launch = cloud_space_check_enabled(cloud_cfg)
     logger.info(
         f"云端空间检查: 启用={cloud_enabled_launch} "
         f"(enable_upload_file={cloud_cfg.enable_upload_file}, "
@@ -126,42 +237,53 @@ async def disk_space_monitor_task():
             break
 
         try:
-            await asyncio.sleep(
-                min(check_interval, 5)
-            )  # Cap at 5s for fast exit response
+            # 按配置的检查间隔轮询(分片睡眠以保持退出响应)
+            if not await _sleep_with_exit_check(check_interval):
+                logger.info("磁盘空间监控任务收到退出信号，准备退出")
+                break
 
             has_space, available_gb, total_gb = await check_disk_space(threshold_gb)
 
-            # Cloud storage space check (rclone only; None = unknown -> fail-open)
-            cloud_enabled = (
-                app.cloud_drive_config.enable_upload_file
-                and app.cloud_drive_config.upload_adapter == "rclone"
-            )
+            # 云端空间检查(rclone only)。
+            # 查询失败(None)时沿用上次成功结果；仅在上传启用时参与判定 ——
+            # 未启用上传 ⇒ 不做云端判定，不拦截正常下载。
+            cloud_enabled = cloud_space_check_enabled(app.cloud_drive_config)
             cloud_ok = None
             cloud_free_gb = None
             cloud_total_gb = None
+            cloud_source = CLOUD_SOURCE_UNKNOWN
+            cloud_age = 0.0
             cloud_threshold = 10.0
             if cloud_enabled:
-                cloud_threshold = getattr(
-                    app.cloud_drive_config, "cloud_space_threshold_gb", 10.0
+                cloud_threshold = float(
+                    getattr(app.cloud_drive_config, "cloud_space_threshold_gb", 10.0)
                 )
-                if cloud_threshold > 0:
-                    from module.cloud_drive import check_cloud_space
+                (
+                    cloud_ok,
+                    cloud_free_gb,
+                    cloud_total_gb,
+                    cloud_source,
+                    cloud_age,
+                ) = await resolve_cloud_space(app.cloud_drive_config, cloud_threshold)
 
-                    cloud_ok, cloud_free_gb, cloud_total_gb = await check_cloud_space(
-                        app.cloud_drive_config, cloud_threshold
-                    )
-                else:
-                    cloud_enabled = False  # 阈值 0 = 不启用云端空间检查
-
-            # 本地和云端都正常才算恢复；云端查询失败(None)按正常处理(不暂停)
+            # 本地和云端都正常才算恢复。
+            # 云端: False = 不足(含"沿用上次不足结果") ⇒ 判为不足；
+            #       True = 充足(实测或沿用上次结果)；None = 查不到且无历史结果 ⇒ fail-open。
             both_ok = has_space and (cloud_ok is not False)
+
+            cloud_state_text = {
+                True: "充足",
+                False: "不足",
+                None: "未知/失败",
+            }[cloud_ok]
+            if cloud_source == CLOUD_SOURCE_CACHE:
+                cloud_state_text += f"(沿用{format_age(cloud_age)}前结果)"
 
             logger.debug(
                 f"存储监控判定: 本地={'充足' if has_space else '不足'}"
                 f"(free={available_gb}GB/total={total_gb}GB, 阈值={threshold_gb}GB), "
                 f"云端检查={'启用' if cloud_enabled else '未启用'}, "
-                f"云端={'充足' if cloud_ok is True else ('不足' if cloud_ok is False else '未知/失败')}"
+                f"云端={cloud_state_text} (来源={cloud_source})"
                 f"{'' if cloud_free_gb is None else f' (free={cloud_free_gb}GB/total={cloud_total_gb}GB, 阈值={cloud_threshold}GB)'}, "
                 f"综合={'正常' if both_ok else '不足'}, "
                 f"space_low={disk_monitor.space_low}, cloud_space_low={disk_monitor.cloud_space_low}"
@@ -183,8 +305,12 @@ async def disk_space_monitor_task():
                             f"\n云端空间不足: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
                             f" (阈值 {cloud_threshold}GB)"
                         )
+                        if cloud_source == CLOUD_SOURCE_CACHE:
+                            cloud_msg += (
+                                f"\n（云端空间查询失败，沿用 {format_age(cloud_age)}前的查询结果）"
+                            )
                     elif cloud_ok is None and cloud_enabled:
-                        cloud_msg = "\n云端空间: 查询失败（本次不暂停）"
+                        cloud_msg = "\n云端空间: 查询失败（无历史结果，本次不暂停）"
                     # 首条不足通知响铃，问题持续期间的重复通知静音(passive)
                     first_low = not disk_monitor.space_low_first_notified
                     if first_low:
@@ -212,8 +338,12 @@ async def disk_space_monitor_task():
                             cloud_msg = (
                                 f"\n云端空间: 剩余 {cloud_free_gb}GB / 共 {cloud_total_gb}GB"
                             )
+                            if cloud_source == CLOUD_SOURCE_CACHE:
+                                cloud_msg += (
+                                    f"\n（云端空间查询失败，沿用 {format_age(cloud_age)}前的查询结果）"
+                                )
                         else:
-                            cloud_msg = "\n云端空间: 查询失败"
+                            cloud_msg = "\n云端空间: 查询失败（无历史结果）"
                     await notification_manager.send_disk_space_notification(
                         both_ok,
                         available_gb,
