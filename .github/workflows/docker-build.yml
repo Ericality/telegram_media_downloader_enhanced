@@ -10,6 +10,9 @@ on:
       - 'CODE_OF_CONDUCT.md'
       - 'CONTRIBUTING.md'
       - 'LICENSE'
+      # 仓库配置（workflow / dependabot / issue 模板）不参与镜像构建，
+      # 不忽略它们会导致"内容相同的镜像"被反复重建并覆盖 latest 的 digest。
+      - '.github/**'
   workflow_dispatch:  # 允许手动触发
 
 jobs:

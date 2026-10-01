@@ -6,9 +6,23 @@ updates:
     interval: weekly
     time: "12:00"
     timezone: CET
-  open-pull-requests-limit: 10
+  # 分组后每周最多 2 条 PR（dev 工具 / 运行时各一条），而不是每个包一条。
+  # 未匹配任何组的依赖仍按单条 PR 提（例如新出现的包）。
+  open-pull-requests-limit: 5
+  groups:
+    # dev 工具链（black/isort/pytest/pre-commit/mock/pytest-cov…）——只在 CI 与本地用，
+    # 与运行镜像无关，可以整组一起升、一起看。
+    dev-tooling:
+      dependency-type: development
+      patterns:
+      - "*"
+    # 运行时依赖——会影响 Docker 镜像与生产，整组升但必须看 CI + 部署后验证。
+    runtime:
+      dependency-type: production
+      patterns:
+      - "*"
   ignore:
-  # 这两个包没有安全驱动、且升级会牵动日志/控制台渲染，暂不跟进
-  # （想升级时删掉对应行即可，Dependabot 下轮会重新提 PR）
+  # 这两个包没有安全驱动、且升级会牵动日志/控制台渲染（rich）/日志底座行为（loguru），
+  # 暂不跟进。想升级时删掉对应行即可，Dependabot 下轮会重新提 PR。
   - dependency-name: "rich"
   - dependency-name: "loguru"
