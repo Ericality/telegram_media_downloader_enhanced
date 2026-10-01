@@ -3,15 +3,17 @@
 #https://github.com/tangyoha/pyrogram/archive/refs/heads/master_v2.0.69_1.zip
 PyYAML>=5.3.1
 rich==12.5.1
-PyTgCrypto>=1.2.11
+PyTgCrypto>=1.2.12
 loguru==0.6.0
 # aligo==5.4.0
-Werkzeug==2.2.2
-flask==2.2.2
+# Flask 3.0.0 起才要求 Werkzeug>=3.0.0；2.2.x/2.3.x 只声明下限无上限，
+# 单独升 Werkzeug 会让 flask 2.2.2 import 失败(url_quote) ⇒ 两者必须成对升。
+Werkzeug==3.1.9
+flask==3.1.3
 ply==3.11
 ruamel.yaml==0.17.21
-flask-login==0.6.2
+flask-login==0.6.3
 pycryptodome==3.18.0
-requests==2.32.3
-psutil>=5.9.0
-aiohttp>=3.8.0
+requests==2.34.2
+psutil>=7.2.2
+aiohttp>=3.14.3
