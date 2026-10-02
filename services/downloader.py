@@ -275,12 +275,16 @@ async def download_task(client, message, node):
                     f"[RETRY] 重试成功: chat_id={node.chat_id}, message_id={message.id}"
                 )
 
+        # 文件大小必须在**上传之前**取好：after_upload_file_delete=true 时上传走
+        # `rclone move`，会把本地文件移走 ⇒ 上传后再 getsize 会 FileNotFoundError，
+        # 被 worker 当成"网络连接错误"记成失败任务（2026-10-02 实测：失败列表 97% 是这种假失败）。
+        file_size = 0
         if file_name and os.path.exists(file_name):
             try:
                 file_size = os.path.getsize(file_name)
                 disk_monitor.stats_since_last_notification["download_size"] += file_size
-            except:
-                pass
+            except OSError as e:
+                logger.debug(f"获取文件大小失败（不影响下载/上传）: {e}")
 
         # Clear download_result early so web UI doesn't count upload phase
         try:
@@ -333,7 +337,7 @@ async def download_task(client, message, node):
             app.set_download_id(node, message.id, download_status)
 
         node.download_status[message.id] = download_status
-        file_size = os.path.getsize(file_name) if file_name else 0
+        # file_size 已在下载完成后、上传之前取好（上传可能已把本地文件移走）
 
         await upload_telegram_chat(
             client,

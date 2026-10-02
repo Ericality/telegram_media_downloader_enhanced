@@ -10,11 +10,7 @@ from unittest import mock
 
 import media_downloader as md
 from core.models import ChatDownloadConfig, TaskNode
-from workers.download import (
-    _config_seconds,
-    download_all_chat,
-    download_chat_task,
-)
+from workers.download import _config_seconds, download_all_chat, download_chat_task
 
 from .test_common import MockMessage
 
@@ -95,9 +91,7 @@ def test_download_chat_task_yields_when_time_slice_exceeded():
         "workers.download.add_download_task", new=mock.AsyncMock(return_value=True)
     ) as mock_add:
         still_pending = asyncio.run(
-            download_chat_task(
-                mock.MagicMock(), 123, chat_cfg, node, max_seconds=1e-9
-            )
+            download_chat_task(mock.MagicMock(), 123, chat_cfg, node, max_seconds=1e-9)
         )
 
     assert still_pending is True  # 有剩余 ⇒ 下一轮要继续
@@ -182,9 +176,9 @@ def test_download_all_chat_sleeps_recheck_interval_when_all_idle():
         return True
 
     slept = []
-    with mock.patch(
-        "workers.download.download_chat_task", new=fake_task
-    ), mock.patch("workers.download.sleep_with_exit_check", new=fake_sleep):
+    with mock.patch("workers.download.download_chat_task", new=fake_task), mock.patch(
+        "workers.download.sleep_with_exit_check", new=fake_sleep
+    ):
         _run_download_all_chat()
 
     assert slept == [1800.0, 1800.0]  # 每轮之后等 30 分钟
@@ -200,9 +194,7 @@ def test_download_all_chat_no_recheck_when_disabled():
         calls.append(chat_id)
         return False
 
-    with mock.patch(
-        "workers.download.download_chat_task", new=fake_task
-    ), mock.patch(
+    with mock.patch("workers.download.download_chat_task", new=fake_task), mock.patch(
         "workers.download.sleep_with_exit_check", new=mock.AsyncMock(return_value=True)
     ) as mock_sleep:
         _run_download_all_chat()
