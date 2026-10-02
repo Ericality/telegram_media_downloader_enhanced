@@ -26,7 +26,31 @@ from workers.monitor import (
     disk_monitor,
     format_age,
     resolve_cloud_space,
+    sleep_with_exit_check,
 )
+
+# 生产者调度配置的默认值（小时 / 分钟）——与 module/app.py 的 BASE_CONFIG 保持一致
+SCHEDULER_CONFIG_DEFAULTS = {
+    "chat_max_continuous_hours": 72.0,
+    "chat_recheck_interval_minutes": 30.0,
+}
+
+
+def _config_seconds(key: str, multiplier: float) -> float:
+    """读取生产者调度用的时间配置并换算成秒。
+
+    ``<= 0`` 或缺失/非法一律返回 ``0.0``（调用方视为「关闭」）。
+    """
+    default = SCHEDULER_CONFIG_DEFAULTS.get(key, 0.0)
+    raw = app.get_config(key, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning(f"配置 {key}={raw!r} 非法，改用默认值 {default}")
+        value = default
+    if value <= 0:
+        return 0.0
+    return value * multiplier
 
 
 def _check_download_finish(media_size: int, download_path: str, ui_file_name: str):
@@ -508,15 +532,33 @@ async def download_chat_task(
     chat_id: Union[int, str],
     chat_download_config: ChatDownloadConfig,
     node: TaskNode,
-):
+    max_seconds: float = None,
+) -> bool:
     """Producer: feed new messages to download queue one-by-one.
 
     Uses add_download_task() which blocks on queue.put() when full,
     creating natural backpressure — producer waits for workers to free slots.
+
+    Args:
+        max_seconds: 单个会话连续下载的时间片上限（秒）。到点就停止本轮迭代、
+            让位给其它会话；下一轮会从 ``last_read_message_id`` 续传（该值逐条
+            即时落盘 ⇒ 不会漏也不会重）。``None``/``<=0`` = 不限制（旧行为）。
+
+    Returns:
+        ``True`` = 本轮被时间片截断（该会话还有剩余消息，下一轮要继续）；
+        ``False`` = 已走到最新消息（本轮走完）。
     """
+    timed_out = False
+    started_at = time.time()
+    added_before = node.total_task
     try:
         logger.info(
             f"开始处理聊天 {chat_id}，last_read_message_id={chat_download_config.last_read_message_id}"
+            + (
+                f"（时间片上限 {max_seconds / 3600:.2f} 小时）"
+                if max_seconds and max_seconds > 0
+                else ""
+            )
         )
 
         messages_iter = get_chat_history_v2(
@@ -532,6 +574,21 @@ async def download_chat_task(
 
         async for message in messages_iter:
             logger.debug(f"处理消息 {message.id}")
+
+            # 时间片到点：停止本轮迭代，让位给其它会话（下一轮从此处续传）
+            if (
+                max_seconds
+                and max_seconds > 0
+                and time.time() - started_at >= max_seconds
+            ):
+                timed_out = True
+                logger.warning(
+                    f"聊天 {chat_id} 本轮已连续处理 {max_seconds / 3600:.2f} 小时"
+                    f"（本轮新增 {node.total_task - added_before} 个任务，"
+                    f"last_read_message_id={chat_download_config.last_read_message_id}）"
+                    f"⇒ 时间片到点，让位给其它会话，下一轮从此处续传"
+                )
+                break
 
             if getattr(app, "force_exit", False) or not getattr(
                 app, "is_running", True
@@ -579,23 +636,86 @@ async def download_chat_task(
         chat_download_config.total_task = node.total_task
         node.is_running = True
 
-        logger.info(f"聊天 {chat_id} 新消息处理完成，共添加 {node.total_task} 个新任务")
+        added_this_round = node.total_task - added_before
+        if timed_out:
+            logger.info(
+                f"聊天 {chat_id} 本轮让位结束：新增 {added_this_round} 个任务，"
+                f"下一轮从 last_read_message_id={chat_download_config.last_read_message_id} 续传"
+            )
+        else:
+            logger.info(f"聊天 {chat_id} 新消息处理完成，本轮添加 {added_this_round} 个新任务")
     except Exception as e:
         logger.exception(f"聊天 {chat_id} 下载任务处理异常: {e}")
         chat_download_config.need_check = True
 
+    return timed_out
+
 
 async def download_all_chat(client: pyrogram.Client):
-    """Process chats sequentially; start one global retry producer in background."""
+    """生产者主循环：按会话轮转 + 时间片，一轮全无新内容时按间隔复查。
+
+    - **时间片**（``chat_max_continuous_hours``）：单个会话最多连续处理这么久，
+      到点让位给下一个会话 —— 长对话不会饿死其它会话。
+    - **循环复查**（``chat_recheck_interval_minutes``）：一轮里所有会话都没新内容
+      时等待该间隔再开始下一轮，这样下载完成后依然会自动发现新内容。
+      设为 <= 0 则一轮跑完即结束（旧行为，需要重启才会再检查）。
+    """
     for chat_id, value in app.chat_download_config.items():
         value.node = TaskNode(chat_id=chat_id)
 
     # Start one global retry producer (long-running background task)
     retry_task = app.loop.create_task(retry_producer(client))
 
-    # Process chats sequentially — natural single-producer backpressure
-    for chat_id, value in app.chat_download_config.items():
-        await download_chat_task(client, chat_id, value, value.node)
+    max_seconds = _config_seconds("chat_max_continuous_hours", 3600.0)
+    recheck_seconds = _config_seconds("chat_recheck_interval_minutes", 60.0)
+    logger.info(
+        f"生产者调度: 会话时间片={'不限' if not max_seconds else f'{max_seconds / 3600:.2f} 小时'}，"
+        f"空闲复查间隔={'关闭' if not recheck_seconds else f'{recheck_seconds / 60:.0f} 分钟'}"
+    )
+
+    round_no = 0
+    while not getattr(app, "force_exit", False) and getattr(app, "is_running", True):
+        round_no += 1
+        round_start = time.time()
+        yielded = []
+        for chat_id, value in app.chat_download_config.items():
+            if getattr(app, "force_exit", False) or not getattr(
+                app, "is_running", True
+            ):
+                break
+            try:
+                still_pending = await download_chat_task(
+                    client, chat_id, value, value.node, max_seconds=max_seconds
+                )
+            except Exception as e:
+                logger.exception(f"聊天 {chat_id} 生产者异常: {e}")
+                still_pending = False
+            if still_pending:
+                yielded.append(chat_id)
+
+        if getattr(app, "force_exit", False) or not getattr(app, "is_running", True):
+            break
+
+        elapsed = time.time() - round_start
+        if yielded:
+            logger.info(
+                f"第 {round_no} 轮完成（耗时 {elapsed / 60:.1f} 分钟）："
+                f"{len(yielded)} 个会话因时间片让位（{yielded}）⇒ 立即开始下一轮"
+            )
+        elif recheck_seconds and recheck_seconds > 0:
+            logger.info(
+                f"第 {round_no} 轮完成（耗时 {elapsed / 60:.1f} 分钟）：所有会话均无新内容 ⇒ "
+                f"{recheck_seconds / 60:.0f} 分钟后复查"
+            )
+            if not await sleep_with_exit_check(recheck_seconds):
+                logger.info("生产者收到退出信号，停止复查")
+                break
+        else:
+            logger.info(
+                f"第 {round_no} 轮完成（耗时 {elapsed / 60:.1f} 分钟）：所有会话均无新内容，"
+                f"且未启用空闲复查 ⇒ 生产者结束（重试生产者继续运行）"
+            )
+            break
 
     logger.info("所有新消息生产者已完成，重试生产者将继续运行")
 

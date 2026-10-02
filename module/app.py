@@ -122,6 +122,13 @@ class ConfigSchema:
         "enable_download_txt": (False, bool, None),
         "forward_limit": (33, int, None),
         "download_duplicate_threshold": (5, int, None),
+        # 生产者调度：单个会话连续下载的时间片上限（小时）。到点让位给其它会话，
+        # 下一轮从 last_read_message_id 续传 ⇒ 长对话不会饿死其它会话。
+        # <= 0 表示不限制（回到"一个会话下完才轮到下一个"的旧行为）。
+        "chat_max_continuous_hours": (72, float, lambda x: float(x)),
+        # 生产者调度：一轮里所有会话都没有新内容时的复查间隔（分钟）。
+        # <= 0 表示不做循环复查（一轮跑完即结束，等下次重启）。
+        "chat_recheck_interval_minutes": (30, float, lambda x: float(x)),
     }
 
     # Notification config schema

@@ -740,7 +740,9 @@ async def download_from_bot(client: pyrogram.Client, message: pyrogram.types.Mes
             )
             _bot.add_task_node(node)
             _bot.app.loop.create_task(
-                _bot.download_chat_task(_bot.client, chat_download_config, node)
+                _bot.download_chat_task(
+                    _bot.client, chat_id, chat_download_config, node
+                )
             )
     except Exception as e:
         await client.send_message(
@@ -997,7 +999,7 @@ async def forward_msg(node: TaskNode, message_id: int):
     chat_download_config.last_read_message_id = message_id
     chat_download_config.download_filter = node.download_filter  # type: ignore
 
-    await _bot.download_chat_task(_bot.client, chat_download_config, node)
+    await _bot.download_chat_task(_bot.client, node.chat_id, chat_download_config, node)
 
 
 async def set_listen_forward_msg(

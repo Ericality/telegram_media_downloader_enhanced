@@ -164,7 +164,7 @@ async def resolve_cloud_space(drive_config, threshold_gb: float) -> tuple:
     return None, None, None, CLOUD_SOURCE_UNKNOWN, 0.0
 
 
-async def _sleep_with_exit_check(seconds: float) -> bool:
+async def sleep_with_exit_check(seconds: float) -> bool:
     """分片睡眠并保持对退出信号的响应；返回 ``False`` 表示收到退出信号。
 
     旧实现写成 ``asyncio.sleep(min(check_interval, 5))``，把配置的检查间隔(默认 300 秒)
@@ -238,7 +238,7 @@ async def disk_space_monitor_task():
 
         try:
             # 按配置的检查间隔轮询(分片睡眠以保持退出响应)
-            if not await _sleep_with_exit_check(check_interval):
+            if not await sleep_with_exit_check(check_interval):
                 logger.info("磁盘空间监控任务收到退出信号，准备退出")
                 break
 
