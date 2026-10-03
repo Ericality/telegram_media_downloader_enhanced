@@ -249,3 +249,44 @@ def test_download_chat_task_signature_matches_bot_call_sites():
                 f"{len(node.args)} 个位置参数，需要 {len(params)} 个"
             )
     assert call_sites == 2, f"期望 2 处 bot 调用点，实际 {call_sites}"
+
+
+class _ClockStub:
+    """按预设序列返回 time.time()（用完后固定为最后一个值）。"""
+
+    def __init__(self, values):
+        self._values = list(values)
+        self._i = 0
+
+    def time(self):
+        value = self._values[min(self._i, len(self._values) - 1)]
+        self._i += 1
+        return value
+
+
+def test_time_slice_log_reports_actual_elapsed_not_the_limit():
+    """让位日志必须打"实际耗时"，不能只打时间片上限（背压会把实际耗时拖过上限）。"""
+    _reset_app()
+    chat_cfg = ChatDownloadConfig()
+    node = TaskNode(chat_id=123)
+    limit = 3600  # 时间片上限 1 小时
+    clock = _ClockStub([1_000_000.0, 1_000_000.0 + 2 * 3600])  # 起始、第一条消息检查时（实际跑了 2 小时）
+
+    with mock.patch(
+        "workers.download.get_chat_history_v2", new=_history_of([1, 2, 3])
+    ), mock.patch(
+        "workers.download.add_download_task", new=mock.AsyncMock(return_value=True)
+    ), mock.patch(
+        "workers.download.time", new=clock
+    ), mock.patch(
+        "workers.download.logger"
+    ) as fake_logger:
+        still_pending = asyncio.run(
+            download_chat_task(mock.MagicMock(), 123, chat_cfg, node, max_seconds=limit)
+        )
+
+    assert still_pending is True
+    messages = [c.args[0] for c in fake_logger.warning.call_args_list]
+    msg = next(m for m in messages if "让位" in m)
+    assert "2.00 小时" in msg, f"应打实际耗时 2.00 小时，实际: {msg}"
+    assert "1.00 小时" in msg, f"应同时打时间片上限 1.00 小时，实际: {msg}"

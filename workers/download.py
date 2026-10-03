@@ -582,9 +582,14 @@ async def download_chat_task(
                 and time.time() - started_at >= max_seconds
             ):
                 timed_out = True
+                # 注意：这里必须打**实际耗时**，不能打时间片上限 ——
+                # 队列背压会让"实际让位时刻"晚于上限（实测 36 秒的上限被拖到 4 分钟以上），
+                # 只打上限会让人误以为逻辑算错（2026-10-03 实测踩到）。
+                elapsed_seconds = time.time() - started_at
                 logger.warning(
-                    f"聊天 {chat_id} 本轮已连续处理 {max_seconds / 3600:.2f} 小时"
-                    f"（本轮新增 {node.total_task - added_before} 个任务，"
+                    f"聊天 {chat_id} 本轮已连续处理 {elapsed_seconds / 3600:.2f} 小时"
+                    f"（时间片上限 {max_seconds / 3600:.2f} 小时；"
+                    f"本轮新增 {node.total_task - added_before} 个任务，"
                     f"last_read_message_id={chat_download_config.last_read_message_id}）"
                     f"⇒ 时间片到点，让位给其它会话，下一轮从此处续传"
                 )
