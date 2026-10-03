@@ -1,9 +1,15 @@
 """Tests for rclone remote verification and cloud space checks."""
 import asyncio
 import json
+import os
 from unittest import mock
 
-from module.cloud_drive import CloudDriveConfig, check_cloud_space, verify_rclone_remote
+from module.cloud_drive import (
+    CloudDrive,
+    CloudDriveConfig,
+    check_cloud_space,
+    verify_rclone_remote,
+)
 
 
 class FakeProc:
@@ -246,3 +252,119 @@ def test_check_cloud_space_unlimited_backend_has_free_false_zero():
     assert has_space is True
     assert free_gb == 990.0
     assert total_gb == 1000.0
+
+
+# --------------------------------------------------------------------------
+# 上传后校验：超时不得把"已上传成功"记成失败（2026-10-03 定因）
+# --------------------------------------------------------------------------
+
+
+class _AsyncLines:
+    """既是异步可迭代（逐行读 stdout），又能 .read() 返回空。"""
+
+    def __init__(self, lines=()):
+        self._lines = [l.encode() if isinstance(l, str) else l for l in lines]
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self._lines:
+            raise StopAsyncIteration
+        return self._lines.pop(0)
+
+    async def read(self):
+        return b""
+
+
+class _UploadProc:
+    """模拟 rclone 子进程：可给 stdout 行、可在 wait() 时执行副作用（如 move 掉源文件）、可挂住。"""
+
+    def __init__(self, lines=(), on_wait=None, hang=False):
+        self.stdout = _AsyncLines(lines)
+        self.stderr = _AsyncLines()
+        self.returncode = 0
+        self._on_wait = on_wait
+        self._hang = hang
+        self.killed = False
+        self.communicate_called = False
+
+    async def wait(self):
+        if self._on_wait:
+            self._on_wait()
+        return self.returncode
+
+    async def communicate(self):
+        self.communicate_called = True
+        if self._hang:
+            await asyncio.sleep(3600)  # 永不返回 ⇒ 触发 wait_for 超时
+        return b"", b""
+
+    def kill(self):
+        self.killed = True
+
+
+class _AlwaysCached(dict):
+    def get(self, key, default=None):
+        return True
+
+
+def _upload_case(tmp_path, remove_source_on_move):
+    """造一次上传：rclone move 成功（stdout 有 100%），第二次子进程（rclone size）挂住。"""
+    save_path = str(tmp_path)
+    local = tmp_path / "sub" / "sample.mp4"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_bytes(b"x" * 1024)
+
+    cfg = CloudDriveConfig(
+        remote_dir="MyRemote:telegram/downloads",
+        rclone_path="/usr/bin/rclone",
+    )
+    cfg.dir_cache = _AlwaysCached()
+
+    procs = []
+
+    def on_move_done():
+        if remove_source_on_move:
+            os.remove(local)
+
+    def factory(cmd, **kwargs):
+        if len(procs) == 0:
+            proc = _UploadProc(
+                ["Transferred: 1 KiB / 1 KiB, 100%, 0 B/s, ETA -"], on_wait=on_move_done
+            )
+        else:
+            proc = _UploadProc(hang=True)
+        procs.append(proc)
+        return proc
+
+    return cfg, save_path, str(local), factory, procs
+
+
+def test_upload_verify_timeout_with_source_moved_counts_as_success(tmp_path):
+    """校验超时 + 源文件已被 move 走 ⇒ 视为上传成功（不得记失败、不得抛异常）。"""
+    cfg, save_path, local, factory, procs = _upload_case(tmp_path, True)
+
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell", side_effect=factory
+    ), mock.patch("module.cloud_drive.VERIFY_TIMEOUT_SECONDS", 0.05):
+        ok = asyncio.run(CloudDrive.rclone_upload_file(cfg, save_path, local, None, ()))
+
+    assert ok is True
+    assert not os.path.exists(local)
+    verify_proc = procs[1]
+    assert verify_proc.communicate_called is True
+    assert verify_proc.killed is True  # 超时后必须杀掉卡住的校验进程
+
+
+def test_upload_verify_timeout_with_source_present_still_fails(tmp_path):
+    """校验超时但源文件仍在 ⇒ 仍按失败处理（不能把真失败放行）。"""
+    cfg, save_path, local, factory, procs = _upload_case(tmp_path, False)
+
+    with mock.patch(
+        "module.cloud_drive.asyncio.create_subprocess_shell", side_effect=factory
+    ), mock.patch("module.cloud_drive.VERIFY_TIMEOUT_SECONDS", 0.05):
+        ok = asyncio.run(CloudDrive.rclone_upload_file(cfg, save_path, local, None, ()))
+
+    assert ok is False
+    assert os.path.exists(local)  # 源文件保留，等重试

@@ -129,6 +129,10 @@ class ConfigSchema:
         # 生产者调度：一轮里所有会话都没有新内容时的复查间隔（分钟）。
         # <= 0 表示不做循环复查（一轮跑完即结束，等下次重启）。
         "chat_recheck_interval_minutes": (30, float, lambda x: float(x)),
+        # 云端空间「实测成功结果」的复用窗口（秒）：窗口内各 worker 直接复用、
+        # 不再各自起 rclone about（摊薄 rclone 调用，缓解与上传/校验抢资源）。
+        # <= 0 表示关闭窗口（每次都实测）。
+        "cloud_space_cache_seconds": (60, float, lambda x: float(x)),
     }
 
     # Notification config schema

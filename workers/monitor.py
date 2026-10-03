@@ -72,7 +72,11 @@ async def check_disk_space(threshold_gb: float = 10.0) -> tuple:
 # 云端空间判定来源
 CLOUD_SOURCE_LIVE = "live"
 CLOUD_SOURCE_CACHE = "cache"
+CLOUD_SOURCE_CACHE_FRESH = "cache_fresh"
 CLOUD_SOURCE_UNKNOWN = "unknown"
+
+# 云端空间「成功结果」的复用窗口默认值（秒）——见 module/app.py BASE_CONFIG
+CLOUD_SPACE_CACHE_SECONDS_DEFAULT = 60.0
 
 
 def cloud_space_check_enabled(drive_config) -> bool:
@@ -90,6 +94,16 @@ def cloud_space_check_enabled(drive_config) -> bool:
         return float(getattr(drive_config, "cloud_space_threshold_gb", 0) or 0) > 0
     except (TypeError, ValueError):
         return False
+
+
+def _cloud_cache_seconds() -> float:
+    """云端空间成功结果的复用窗口（秒）；<=0 / 非法 ⇒ 0（每次都实测）。"""
+    raw = app.get_config("cloud_space_cache_seconds", CLOUD_SPACE_CACHE_SECONDS_DEFAULT)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return CLOUD_SPACE_CACHE_SECONDS_DEFAULT
+    return value if value > 0 else 0.0
 
 
 def _cached_cloud_space():
@@ -127,12 +141,33 @@ async def resolve_cloud_space(drive_config, threshold_gb: float) -> tuple:
         (ok, free_gb, total_gb, source, age_seconds)
         - ok: ``True``/``False`` = 判定结果；``None`` = 查不到且没有历史成功结果
           （调用方 fail-open，不因云端空间暂停）。
-        - source: ``"live"`` / ``"cache"`` / ``"unknown"``。
-        - age_seconds: ``source == "cache"`` 时为上次成功查询距今秒数，否则 ``0.0``。
+        - source: ``"live"``（本次实测）/ ``"cache_fresh"``（命中新鲜窗口，未实测）/
+          ``"cache"``（实测失败，沿用上次成功结果）/ ``"unknown"``（无任何可用结果）。
+        - age_seconds: 非 ``live`` 时为上次成功查询距今秒数，否则 ``0.0``。
     """
     from module.cloud_drive import check_cloud_space
 
     threshold_gb = float(threshold_gb)
+
+    # 新鲜度窗口：窗口内直接复用上次成功结果，**不再起 rclone 子进程**。
+    # 5 个下载 worker 每轮都会问一次云端空间，实测这些 rclone 调用会与上传/校验
+    # 抢资源（OneDrive 限流下加剧上传校验超时）⇒ 用一个窗口把调用摊薄。
+    cache_seconds = _cloud_cache_seconds()
+    cached = _cached_cloud_space()
+    if cached is not None and cache_seconds > 0 and cached[2] < cache_seconds:
+        cached_free_gb, cached_total_gb, age = cached
+        logger.debug(
+            f"[cloud-space] 命中新鲜缓存({format_age(age)}前，窗口 {cache_seconds:.0f}s)"
+            f" ⇒ 跳过本次 rclone 查询"
+        )
+        return (
+            cached_free_gb >= threshold_gb,
+            cached_free_gb,
+            cached_total_gb,
+            CLOUD_SOURCE_CACHE_FRESH,
+            age,
+        )
+
     ok, free_gb, total_gb = await check_cloud_space(drive_config, threshold_gb)
 
     if ok is not None:
@@ -143,7 +178,6 @@ async def resolve_cloud_space(drive_config, threshold_gb: float) -> tuple:
         )
         return ok, free_gb, total_gb, CLOUD_SOURCE_LIVE, 0.0
 
-    cached = _cached_cloud_space()
     if cached is not None:
         cached_free_gb, cached_total_gb, age = cached
         cached_ok = cached_free_gb >= threshold_gb

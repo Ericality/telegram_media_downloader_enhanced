@@ -19,6 +19,12 @@ from zipfile import ZipFile
 from utils import platform
 
 logger = logging.getLogger(__name__)
+
+# 上传完成后校验远端文件的超时（秒）。2026-10-03 生产实测：原值 15 秒在
+# "OneDrive 限流 + 5 个 worker 各自起 rclone 子进程" 的负载下每天约 190 次超时，
+# 而这些文件其实都已上传成功（rclone move 已把源文件搬走）⇒ 一律被误记成上传失败。
+VERIFY_TIMEOUT_SECONDS = 60
+
 # pylint: disable = R0902
 class CloudDriveConfig:
     """Rclone Config"""
@@ -479,9 +485,29 @@ class CloudDrive:
                     stderr=asyncio.subprocess.PIPE,
                     env=_rclone_env(),
                 )
-                verify_stdout, verify_stderr = await asyncio.wait_for(
-                    verify_proc.communicate(), timeout=15
-                )
+                verify_stdout = b""
+                verify_timed_out = False
+                try:
+                    verify_stdout, verify_stderr = await asyncio.wait_for(
+                        verify_proc.communicate(), timeout=VERIFY_TIMEOUT_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    # 校验超时 ≠ 上传失败（2026-10-03 定因）：
+                    # rclone move 已把源文件搬走时，"源文件已不在"就是上传完成的强证据，
+                    # 不能因为一次慢查询就把已经传上去的文件记成失败。
+                    verify_timed_out = True
+                    try:
+                        verify_proc.kill()
+                    except Exception:  # noqa: BLE001 - 清理失败不影响判定
+                        pass
+                    if os.path.exists(file_to_upload):
+                        logger.error(
+                            f"校验远端文件超时({VERIFY_TIMEOUT_SECONDS}s) 且源文件仍在，按失败处理: {remote_file_path}"
+                        )
+                        return False
+                    logger.warning(
+                        f"校验远端文件超时({VERIFY_TIMEOUT_SECONDS}s)，但源文件已被 move 走 ⇒ 认为上传成功: {remote_file_path}"
+                    )
                 size_output = (
                     verify_stdout.decode(errors="replace").strip()
                     if verify_stdout
@@ -497,11 +523,14 @@ class CloudDrive:
                         remote_size = int(m.group(1))
                         break
 
-                cloud_file_ok = (
-                    remote_size == local_file_size
-                    if remote_size != -1
-                    else (verify_proc.returncode == 0)
-                )
+                if verify_timed_out:
+                    cloud_file_ok = True  # 超时已按"源文件已搬走"判定为成功
+                else:
+                    cloud_file_ok = (
+                        remote_size == local_file_size
+                        if remote_size != -1
+                        else (verify_proc.returncode == 0)
+                    )
 
                 if not cloud_file_ok and os.path.exists(file_to_upload):
                     logger.error(

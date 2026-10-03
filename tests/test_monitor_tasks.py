@@ -409,7 +409,8 @@ def test_resolve_cloud_space_failure_reuses_last_successful_result():
     from workers.monitor import disk_monitor
 
     cfg = _cloud_config()
-    disk_monitor.cloud_space_cache = (50.0, 100.0, time.time())
+    # 刻意用"过期"缓存（超出新鲜窗口）以走"实测失败 ⇒ 沿用上次结果"这条路径
+    disk_monitor.cloud_space_cache = (50.0, 100.0, time.time() - 3600)
 
     with mock.patch(
         "module.cloud_drive.check_cloud_space",
@@ -475,7 +476,11 @@ def test_disk_space_monitor_task_keeps_low_state_when_cloud_query_fails():
             dm.space_low_first_notified = True
             dm.last_notification_time = 0
             dm.paused_workers = set()
-            dm.cloud_space_cache = (5.0, 100.0, time.time())  # 上次成功结果: 5GB
+            dm.cloud_space_cache = (
+                5.0,
+                100.0,
+                time.time() - 3600,  # 过期 ⇒ 走"实测失败沿用上次结果"
+            )
             asyncio.run(disk_space_monitor_task())
 
     assert dm.cloud_space_low is True  # 仍是"不足"，没有被误判为恢复
@@ -569,7 +574,7 @@ def test_disk_space_monitor_task_ignores_cloud_when_upload_disabled():
             dm.space_low_first_notified = False
             dm.last_notification_time = 0
             dm.paused_workers = set()
-            dm.cloud_space_cache = (0.5, 100.0, time.time())  # 极低的历史值
+            dm.cloud_space_cache = (0.5, 100.0, time.time() - 3600)  # 极低的历史值（过期）
             asyncio.run(disk_space_monitor_task())
 
     mock_cloud.assert_not_awaited()  # 未启用上传 ⇒ 连查询都不做
@@ -624,3 +629,52 @@ def test_disk_space_monitor_task_uses_configured_interval():
     assert mock_cloud.await_count == 0  # 300 秒间隔内不得再次查询 rclone
     md.app.is_running = True
     md.app.cloud_drive_config = CloudDriveConfig()
+
+
+def test_resolve_cloud_space_reuses_fresh_cache_without_querying():
+    """新鲜窗口内直接复用成功结果：**不应再起 rclone 子进程**。"""
+    from workers.monitor import disk_monitor
+
+    cfg = _cloud_config()
+    disk_monitor.cloud_space_cache = (50.0, 100.0, time.time())
+    md.app.cloud_space_cache_seconds = 60
+
+    mock_cloud = mock.AsyncMock(return_value=(True, 50.0, 100.0))
+    with mock.patch("module.cloud_drive.check_cloud_space", new=mock_cloud):
+        ok, free_gb, total_gb, source, age = asyncio.run(resolve_cloud_space(cfg, 10.0))
+
+    mock_cloud.assert_not_awaited()  # 命中窗口 ⇒ 跳过实测
+    assert (ok, free_gb, total_gb, source) == (True, 50.0, 100.0, "cache_fresh")
+    assert age >= 0
+
+
+def test_resolve_cloud_space_queries_when_cache_expired():
+    """超出窗口 ⇒ 必须实测（窗口不能让数据无限期陈旧）。"""
+    from workers.monitor import disk_monitor
+
+    cfg = _cloud_config()
+    disk_monitor.cloud_space_cache = (50.0, 100.0, time.time() - 3600)
+    md.app.cloud_space_cache_seconds = 60
+
+    mock_cloud = mock.AsyncMock(return_value=(True, 42.0, 100.0))
+    with mock.patch("module.cloud_drive.check_cloud_space", new=mock_cloud):
+        ok, free_gb, _total, source, _age = asyncio.run(resolve_cloud_space(cfg, 10.0))
+
+    mock_cloud.assert_awaited_once()
+    assert (ok, free_gb, source) == (True, 42.0, "live")
+
+
+def test_resolve_cloud_space_window_disabled_always_queries():
+    """窗口设 0 ⇒ 关闭缓存，每次都实测。"""
+    from workers.monitor import disk_monitor
+
+    cfg = _cloud_config()
+    disk_monitor.cloud_space_cache = (50.0, 100.0, time.time())
+    md.app.cloud_space_cache_seconds = 0
+
+    mock_cloud = mock.AsyncMock(return_value=(True, 42.0, 100.0))
+    with mock.patch("module.cloud_drive.check_cloud_space", new=mock_cloud):
+        _ok, _free, _total, source, _age = asyncio.run(resolve_cloud_space(cfg, 10.0))
+
+    mock_cloud.assert_awaited_once()
+    assert source == "live"
